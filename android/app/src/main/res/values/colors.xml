@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="block_screen_blue">#1E88E5</color>
+    <color name="block_close_button_text">#1E88E5</color>
+    <color name="distracting_pill_bg">#E6141414</color>
+    <color name="distracting_pill_text">#FFFFFFFF</color>
+    <color name="distracting_pill_timer">#FFAEAEB2</color>
+</resources>

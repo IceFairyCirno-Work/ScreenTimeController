@@ -1,0 +1,33 @@
+name: screen_time_controller
+description: "Silo - Monitor and manage your screen usage"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  fl_chart: ^0.70.2
+  shared_preferences: ^2.3.4
+  usage_stats: ^2.0.1
+  local_auth: ^3.0.1
+  flutter_local_notifications: ^19.0.0
+  timezone: ^0.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/cropped/
+    - assets/timerbg/

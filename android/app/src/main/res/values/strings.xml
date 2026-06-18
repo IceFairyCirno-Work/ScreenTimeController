@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Required to detect when blocked apps are opened and show the block screen.</string>
+    <string name="block_overlay_close">Close</string>
+    <string name="app_name_silo">Silo</string>
+</resources>
