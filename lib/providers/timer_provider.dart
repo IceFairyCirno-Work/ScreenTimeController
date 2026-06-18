@@ -60,6 +60,12 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     return true;
   }
 
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    notifyListeners();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -75,11 +81,15 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       Map<String, dynamic>? flutterState;
       try {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = await SharedPreferences.getInstance().timeout(
+          const Duration(seconds: 8),
+        );
         final jsonStr = prefs.getString(_storageKey);
         if (jsonStr != null && jsonStr.isNotEmpty) {
           flutterState = jsonDecode(jsonStr) as Map<String, dynamic>;
         }
+      } on TimeoutException {
+        debugPrint('Timer session prefs load timed out during startup');
       } catch (e, stack) {
         debugPrint('Failed to load timer session from prefs: $e\n$stack');
       }
@@ -87,7 +97,11 @@ class TimerProvider extends ChangeNotifier with WidgetsBindingObserver {
       Map<String, dynamic>? nativeState;
       if (!kIsWeb && Platform.isAndroid) {
         try {
-          nativeState = await _blockingService.getActiveTimer();
+          nativeState = await _blockingService
+              .getActiveTimer()
+              .timeout(const Duration(seconds: 5));
+        } on TimeoutException {
+          debugPrint('Native active timer read timed out during startup');
         } catch (e, stack) {
           debugPrint('Failed to load timer session from native: $e\n$stack');
         }

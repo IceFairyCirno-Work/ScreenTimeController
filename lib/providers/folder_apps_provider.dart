@@ -24,6 +24,8 @@ class FolderAppsProvider extends ChangeNotifier {
   String? _error;
   int _dataVersion = 0;
 
+  Completer<void>? _loadCompleter;
+
   Map<AppFolderType, List<FolderAppItem>> get folderApps => {
         for (final entry in _folderApps.entries)
           entry.key: List<FolderAppItem>.unmodifiable(entry.value),
@@ -57,6 +59,13 @@ class FolderAppsProvider extends ChangeNotifier {
 
   bool isInFolder(AppFolderType type, String packageName) =>
       appsFor(type).any((item) => item.packageName == packageName);
+
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    _isLoading = false;
+    notifyListeners();
+  }
 
   Future<void> addAppToFolder(
     AppFolderType type, {
@@ -105,7 +114,11 @@ class FolderAppsProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    if (_isLoading) return;
+    if (_initialized) return;
+    if (_loadCompleter != null) return _loadCompleter!.future;
+
+    final completer = Completer<void>();
+    _loadCompleter = completer;
 
     _isLoading = true;
     _error = null;
@@ -113,7 +126,9 @@ class FolderAppsProvider extends ChangeNotifier {
     final versionAtStart = _dataVersion;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 8),
+      );
       _adultWebsitesBlocked =
           prefs.getBool(_adultWebsitesBlockedKey) ?? true;
       final jsonStr = prefs.getString(_storageKey);
@@ -126,6 +141,12 @@ class FolderAppsProvider extends ChangeNotifier {
         _folderApps = createInitialFolderApps();
         await _save();
       }
+    } on TimeoutException {
+      _error = 'Folder apps load timed out';
+      debugPrint('Folder apps load timed out — using defaults');
+      if (versionAtStart == _dataVersion) {
+        _folderApps = createInitialFolderApps();
+      }
     } catch (e, stack) {
       _error = e.toString();
       debugPrint('Failed to load folder apps: $e\n$stack');
@@ -136,6 +157,8 @@ class FolderAppsProvider extends ChangeNotifier {
       _isLoading = false;
       _initialized = true;
       notifyListeners();
+      if (!completer.isCompleted) completer.complete();
+      _loadCompleter = null;
     }
 
     // Seeding walks every installed app + icon — never block cold start on it.

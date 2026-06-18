@@ -15,6 +15,7 @@ class PermissionsService {
       MethodChannel('com.screentime.screen_time_controller/permissions');
 
   static const _notificationPermissionTimeout = Duration(minutes: 2);
+  static const _channelTimeout = Duration(seconds: 5);
 
   final ScreenTimeService _screenTimeService = ScreenTimeService();
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -145,8 +146,11 @@ class PermissionsService {
     if (ios == null) return false;
 
     try {
-      final options = await ios.checkPermissions();
+      final options = await ios.checkPermissions().timeout(_channelTimeout);
       return options?.isEnabled ?? false;
+    } on TimeoutException {
+      debugPrint('iOS notification permission check timed out');
+      return false;
     } catch (e) {
       debugPrint('iOS notification permission check failed: $e');
       return false;
@@ -183,7 +187,13 @@ class PermissionsService {
 
   Future<bool> _invokeBool(String method) async {
     try {
-      return await _channel.invokeMethod<bool>(method) ?? false;
+      return await _channel
+              .invokeMethod<bool>(method)
+              .timeout(_channelTimeout) ??
+          false;
+    } on TimeoutException {
+      debugPrint('Permission check timed out ($method)');
+      return false;
     } on PlatformException catch (e) {
       debugPrint('Permission check failed ($method): $e');
       return false;

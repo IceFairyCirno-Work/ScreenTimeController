@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -27,15 +28,25 @@ class AndroidUsageStatsPlatform implements UsageStatsPlatform {
   @override
   Future<bool> hasUsagePermission() async {
     try {
-      final result = await _channel.invokeMethod<bool>('hasUsagePermission');
+      final result = await _channel
+          .invokeMethod<bool>('hasUsagePermission')
+          .timeout(const Duration(seconds: 5));
       if (result != null) return result;
+    } on TimeoutException {
+      debugPrint('Native usage permission check timed out');
+      return false;
     } on MissingPluginException {
       // Fall through to usage_stats plugin.
     } on PlatformException {
       return false;
     }
     try {
-      return await UsageStats.checkUsagePermission() ?? false;
+      return await UsageStats.checkUsagePermission()
+              .timeout(const Duration(seconds: 5)) ??
+          false;
+    } on TimeoutException {
+      debugPrint('Usage stats permission check timed out');
+      return false;
     } catch (e) {
       debugPrint('Permission check failed: $e');
       return false;

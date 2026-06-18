@@ -89,9 +89,18 @@ class EmergencyPassProvider extends ChangeNotifier {
 
   bool get manualUnblocksDisabled => isActive;
 
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    _startTickTimer();
+    notifyListeners();
+  }
+
   Future<void> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 8),
+      );
       final lastMs = prefs.getInt(_keyLastRedeemedAt);
       final untilMs = prefs.getInt(_keyActiveUntil);
       _lastRedeemedAt =
@@ -99,6 +108,8 @@ class EmergencyPassProvider extends ChangeNotifier {
       _activeUntil =
           untilMs == null ? null : DateTime.fromMillisecondsSinceEpoch(untilMs);
       _pruneExpiredActivePass();
+    } on TimeoutException {
+      debugPrint('Emergency pass load timed out');
     } catch (e, stack) {
       debugPrint('Failed to load emergency pass: $e\n$stack');
     } finally {

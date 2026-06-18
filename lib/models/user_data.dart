@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +52,12 @@ class UserData extends ChangeNotifier {
       default:
         return 0.0;
     }
+  }
+
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    notifyListeners();
   }
 
   double get ageMidpoint {
@@ -123,7 +131,9 @@ class UserData extends ChangeNotifier {
   Future<void> loadFromPrefs() async {
     final versionAtStart = _resetVersion;
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 8),
+      );
       if (versionAtStart != _resetVersion) return;
 
       _dailyScreenTime = prefs.getString(_keyDailyScreenTime);
@@ -134,6 +144,8 @@ class UserData extends ChangeNotifier {
       _displayName = prefs.getString(_keyDisplayName) ?? defaultDisplayName;
       if (versionAtStart != _resetVersion) return;
       _onboardingComplete = prefs.getBool(_keyOnboardingComplete) ?? false;
+    } on TimeoutException {
+      debugPrint('User data load timed out — using defaults');
     } catch (e, stack) {
       debugPrint('Failed to load user data: $e\n$stack');
     } finally {

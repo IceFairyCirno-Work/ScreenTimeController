@@ -13,6 +13,12 @@ class GemAchievementProvider extends ChangeNotifier {
   bool get initialized => _initialized;
   String get heroAssetPath => _service.getHeroAssetPath();
 
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    notifyListeners();
+  }
+
   Future<void> load() async {
     if (_initialized) return;
     try {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -21,7 +22,9 @@ class GemAchievementService {
 
   Future<void> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 8),
+      );
       _unlocks = _decodeUnlocks(prefs.getString(_keyUnlockTimestamps));
       _shownUnlockSheets = _decodeShown(prefs.getString(_keyShownUnlockSheets));
       _selectedHeroGemId =
@@ -32,6 +35,8 @@ class GemAchievementService {
         await _persistShownUnlockSheets();
         await prefs.setBool(_keySheetsMigrated, true);
       }
+    } on TimeoutException {
+      debugPrint('Gem achievements load timed out');
     } catch (e, stack) {
       debugPrint('Failed to load gem achievements: $e\n$stack');
     }

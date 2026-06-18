@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'models/gem_achievement.dart';
@@ -24,6 +27,8 @@ import 'widgets/rule_notification_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Avoid blocking the first Flutter frame on a font CDN fetch after cold start.
+  GoogleFonts.config.allowRuntimeFetching = false;
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -77,19 +82,52 @@ class _AppEntry extends StatefulWidget {
   State<_AppEntry> createState() => _AppEntryState();
 }
 
-class _AppEntryState extends State<_AppEntry> {
+class _AppEntryState extends State<_AppEntry> with WidgetsBindingObserver {
   bool _welcomeGemChecked = false;
+  bool _welcomeGemCheckInFlight = false;
+  bool _startupComplete = false;
+  bool _startupBypass = false;
   GemUnlockInfo? _welcomeGemInfo;
   UserData? _userData;
   int _lastUserDataResetVersion = 0;
+  Timer? _startupWatchdog;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadStartupState();
       _attachAccountResetListener();
     });
+    _armStartupWatchdog();
+  }
+
+  void _armStartupWatchdog() {
+    _startupWatchdog?.cancel();
+    _startupWatchdog = Timer(const Duration(seconds: 12), () {
+      if (!mounted || _startupComplete) return;
+      debugPrint('SiloStartup: watchdog fired — bypassing provider gate');
+      _forceProvidersInitialized();
+      setState(() => _startupBypass = true);
+    });
+  }
+
+  void _forceProvidersInitialized() {
+    context.read<UserData>().ensureInitializedForStartup();
+    context.read<PermissionsProvider>().ensureInitializedForStartup();
+    context.read<FolderAppsProvider>().ensureInitializedForStartup();
+    context.read<TimerProvider>().ensureInitializedForStartup();
+    context.read<GemAchievementProvider>().ensureInitializedForStartup();
+    context.read<EmergencyPassProvider>().ensureInitializedForStartup();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_startupComplete) {
+      debugPrint('SiloStartup: resumed while still loading — retrying');
+      _loadStartupState();
+    }
   }
 
   void _attachAccountResetListener() {
@@ -112,45 +150,75 @@ class _AppEntryState extends State<_AppEntry> {
 
   @override
   void dispose() {
+    _startupWatchdog?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _userData?.removeListener(_onUserDataChanged);
     super.dispose();
   }
 
   Future<void> _loadStartupState() async {
-    if (!mounted) return;
+    if (!mounted || _startupComplete) return;
+    debugPrint('SiloStartup: loading state…');
     final userData = context.read<UserData>();
     final permissions = context.read<PermissionsProvider>();
     final folderApps = context.read<FolderAppsProvider>();
     final timer = context.read<TimerProvider>();
     final gems = context.read<GemAchievementProvider>();
     final emergencyPass = context.read<EmergencyPassProvider>();
+
+    // Prefs-backed state can load in parallel; each provider enforces its own
+    // timeout and always marks itself initialized in `finally`.
     await Future.wait([
-      _initNotifications(),
       userData.loadFromPrefs(),
-      permissions.load(),
       folderApps.load(),
       timer.load(),
       gems.load(),
       emergencyPass.load(),
     ]);
+
+    if (!mounted) return;
+
+    // Notifications must finish before permission refresh — both touch the
+    // local notifications plugin and can deadlock when started together.
+    await _initNotifications();
+
+    if (!mounted) return;
+    await permissions.load();
+
+    if (!mounted) return;
+    debugPrint('SiloStartup: load complete');
+    setState(() => _startupComplete = true);
+    _startupWatchdog?.cancel();
   }
 
   Future<void> _initNotifications() async {
     try {
-      await RuleNotificationService.instance.initialize();
+      await RuleNotificationService.instance.initialize().timeout(
+        const Duration(seconds: 8),
+      );
+    } on TimeoutException {
+      debugPrint('RuleNotificationService init timed out');
     } catch (e, stack) {
       debugPrint('RuleNotificationService init failed: $e\n$stack');
     }
   }
 
   Future<void> _checkWelcomeGem() async {
-    if (_welcomeGemChecked) return;
+    if (_welcomeGemChecked || _welcomeGemCheckInFlight) return;
+    _welcomeGemCheckInFlight = true;
     GemUnlockInfo? info;
     try {
       final gems = context.read<GemAchievementProvider>();
-      info = await gems.prepareWelcomeGem();
+      info = await gems.prepareWelcomeGem().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => null,
+      );
+    } on TimeoutException {
+      debugPrint('Welcome gem check timed out');
     } catch (e, stack) {
       debugPrint('Welcome gem check failed: $e\n$stack');
+    } finally {
+      _welcomeGemCheckInFlight = false;
     }
     if (!mounted) return;
     setState(() {
@@ -176,12 +244,14 @@ class _AppEntryState extends State<_AppEntry> {
     final gems = context.watch<GemAchievementProvider>();
     final emergencyPass = context.watch<EmergencyPassProvider>();
 
-    if (!userData.initialized ||
-        !permissions.initialized ||
-        !folderApps.initialized ||
-        !timer.initialized ||
-        !gems.initialized ||
-        !emergencyPass.initialized) {
+    final providersReady = userData.initialized &&
+        permissions.initialized &&
+        folderApps.initialized &&
+        timer.initialized &&
+        gems.initialized &&
+        emergencyPass.initialized;
+
+    if (!providersReady && !_startupBypass) {
       return const Scaffold(
         backgroundColor: AppTheme.background,
         body: Center(

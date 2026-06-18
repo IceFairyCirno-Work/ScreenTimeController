@@ -3,6 +3,7 @@ package com.screentime.screen_time_controller
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -18,10 +19,16 @@ class MainActivity : FlutterFragmentActivity() {
 
     private var pendingNotificationResult: MethodChannel.Result? = null
 
-    // Dedicated background thread for heavy usage/icon computations so the UI
-    // (platform) thread stays free during cold start and data refreshes.
-    private val backgroundExecutor: ExecutorService =
-        Executors.newSingleThreadExecutor { r -> Thread(r, "usage-bg").apply { isDaemon = true } }
+    // Recreated after onDestroy so a resumed activity never reuses a shut-down pool.
+    private var backgroundExecutor: ExecutorService? = null
+
+    private fun executor(): ExecutorService {
+        val existing = backgroundExecutor
+        if (existing != null && !existing.isShutdown) return existing
+        return Executors.newSingleThreadExecutor { r ->
+            Thread(r, "usage-bg").apply { isDaemon = true }
+        }.also { backgroundExecutor = it }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -35,14 +42,23 @@ class MainActivity : FlutterFragmentActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "hasUsagePermission" -> {
-                        result.success(UsageStatsHelper.hasUsagePermission(this))
+                        executor().execute {
+                            try {
+                                replySuccessOnMain(
+                                    result,
+                                    UsageStatsHelper.hasUsagePermission(this),
+                                )
+                            } catch (e: Exception) {
+                                replyErrorOnMain(result, "PERMISSION_ERROR", e.message)
+                            }
+                        }
                     }
                     "openUsageSettings" -> {
                         UsageStatsHelper.openUsagePermissionSettings(this)
                         result.success(null)
                     }
                     "getUsageData" -> {
-                        backgroundExecutor.execute {
+                        executor().execute {
                             try {
                                 val data = UsageStatsHelper.getUsageData(this)
                                 replySuccessOnMain(result, data)
@@ -56,7 +72,7 @@ class MainActivity : FlutterFragmentActivity() {
                         if (packageName.isNullOrBlank()) {
                             result.error("INVALID_ARGUMENT", "packageName is required", null)
                         } else {
-                            backgroundExecutor.execute {
+                            executor().execute {
                                 try {
                                     replySuccessOnMain(
                                         result,
@@ -69,7 +85,7 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     }
                     "getInstalledApps" -> {
-                        backgroundExecutor.execute {
+                        executor().execute {
                             try {
                                 replySuccessOnMain(
                                     result,
@@ -91,7 +107,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 null,
                             )
                         } else {
-                            backgroundExecutor.execute {
+                            executor().execute {
                                 try {
                                     replySuccessOnMain(
                                         result,
@@ -113,7 +129,7 @@ class MainActivity : FlutterFragmentActivity() {
                         if (packageName.isNullOrBlank()) {
                             result.error("INVALID_ARGUMENT", "packageName is required", null)
                         } else {
-                            backgroundExecutor.execute {
+                            executor().execute {
                                 try {
                                     replySuccessOnMain(
                                         result,
@@ -135,7 +151,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 null,
                             )
                         } else {
-                            backgroundExecutor.execute {
+                            executor().execute {
                                 try {
                                     replySuccessOnMain(
                                         result,
@@ -156,7 +172,7 @@ class MainActivity : FlutterFragmentActivity() {
                         if (packageName.isNullOrBlank()) {
                             result.error("INVALID_ARGUMENT", "packageName is required", null)
                         } else {
-                            backgroundExecutor.execute {
+                            executor().execute {
                                 try {
                                     BlockedAppStatsStore.recordUnblock(this, packageName)
                                     replySuccessOnMain(result, null)
@@ -202,9 +218,19 @@ class MainActivity : FlutterFragmentActivity() {
             }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // After Samsung / aggressive OEMs tear down the window, clear the launch
+        // theme background so a resumed Flutter surface is visible immediately.
+        if (flutterEngine != null) {
+            window.decorView.post { window.setBackgroundDrawable(null) }
+        }
+    }
+
     override fun onDestroy() {
         clearPendingNotificationResult(granted = false)
-        backgroundExecutor.shutdownNow()
+        backgroundExecutor?.shutdownNow()
+        backgroundExecutor = null
         super.onDestroy()
     }
 
@@ -268,13 +294,14 @@ class MainActivity : FlutterFragmentActivity() {
             if (!canReplyToChannel()) return@runOnUiThread
             try {
                 result.error(code, message, null)
-            } catch (_: Exception) {
-                // Channel already closed or result already submitted.
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to reply on channel: ${e.message}")
             }
         }
     }
 
     companion object {
+        private const val TAG = "SiloMainActivity"
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1001
     }
 }

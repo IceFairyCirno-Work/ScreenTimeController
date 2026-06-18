@@ -28,11 +28,24 @@ class PermissionsProvider extends ChangeNotifier {
   bool get notificationsOn =>
       isGranted(AppPermissionType.notifications) && _notificationsEnabled;
 
+  void ensureInitializedForStartup() {
+    if (_initialized) return;
+    _initialized = true;
+    notifyListeners();
+  }
+
   Future<void> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 8),
+      );
       _notificationsEnabled = prefs.getBool(_notificationsEnabledKey) ?? true;
-      await refresh();
+      await refresh().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('Permission refresh timed out during startup');
+        },
+      );
     } catch (e, stack) {
       debugPrint('Failed to load permissions: $e\n$stack');
     } finally {
