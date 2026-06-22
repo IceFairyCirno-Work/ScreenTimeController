@@ -72,11 +72,6 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
                 // Only check domains on navigation — not on every keystroke.
                 checkBrowserDomain(pkg)
             }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                if (shouldEnforce(pkg)) {
-                    AppBlockEnforcer.enforce(this, pkg)
-                }
-            }
         }
     }
 
@@ -125,6 +120,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
         browserPackage: String,
         root: android.view.accessibility.AccessibilityNodeInfo? = rootInActiveWindow,
     ) {
+        if (shouldEnforce(browserPackage)) return
         if (!BrowserUrlExtractor.isBrowser(browserPackage)) return
         if (!BlockedDomainsStore.hasBlockedDomains() &&
             !TemporaryDomainUnblocksStore.hasTrackedDomains() &&

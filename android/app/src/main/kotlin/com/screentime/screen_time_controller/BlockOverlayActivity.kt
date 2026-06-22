@@ -17,26 +17,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 class BlockOverlayActivity : Activity() {
     companion object {
         private const val EXTRA_PACKAGE = "blocked_package"
-        private const val SHOW_DEBOUNCE_MS = 200L
 
-        @Volatile
-        private var lastShownPackage: String? = null
-
-        @Volatile
-        private var lastShownTimeMs: Long = 0
-
-        fun show(context: Context, packageName: String) {
-            val now = System.currentTimeMillis()
-            synchronized(this) {
-                if (packageName == lastShownPackage &&
-                    now - lastShownTimeMs < SHOW_DEBOUNCE_MS
-                ) {
-                    return
-                }
-                lastShownPackage = packageName
-                lastShownTimeMs = now
-            }
-
+        internal fun launch(context: Context, packageName: String) {
             val intent = Intent(context, BlockOverlayActivity::class.java).apply {
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -48,13 +30,6 @@ class BlockOverlayActivity : Activity() {
                 putExtra(EXTRA_PACKAGE, packageName)
             }
             context.startActivity(intent)
-        }
-
-        private fun clearShowState() {
-            synchronized(this) {
-                lastShownPackage = null
-                lastShownTimeMs = 0
-            }
         }
     }
 
@@ -73,18 +48,31 @@ class BlockOverlayActivity : Activity() {
             goHome()
         }
 
-        applyRandomOverlayContent()
+        val blockedPackage = intent.getStringExtra(EXTRA_PACKAGE).orEmpty()
+        BlockOverlayCoordinator.prepareSession(blockedPackage)
+        applyOverlayContent()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        BlockOverlayCoordinator.onActivityResumed(intent.getStringExtra(EXTRA_PACKAGE))
+    }
+
+    override fun onPause() {
+        BlockOverlayCoordinator.onActivityPaused()
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        applyRandomOverlayContent()
     }
 
-    private fun applyRandomOverlayContent() {
-        val quote = BlockOverlayContent.randomQuote()
-        val backgroundColor = BlockOverlayContent.randomBackgroundColor()
+    private fun applyOverlayContent() {
+        val blockedPackage = intent.getStringExtra(EXTRA_PACKAGE).orEmpty()
+        val (quote, backgroundColor) =
+            BlockOverlayCoordinator.currentContent()
+                ?: BlockOverlayCoordinator.prepareSession(blockedPackage)
 
         findViewById<LinearLayout>(R.id.overlayRoot).setBackgroundColor(backgroundColor)
         findViewById<TextView>(R.id.txtEmoji).text = quote.emoji
@@ -99,16 +87,12 @@ class BlockOverlayActivity : Activity() {
     }
 
     private fun goHome() {
+        BlockOverlayCoordinator.onUserDismissed()
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         startActivity(homeIntent)
         finish()
-    }
-
-    override fun onDestroy() {
-        clearShowState()
-        super.onDestroy()
     }
 }

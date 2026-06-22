@@ -9,15 +9,7 @@ import android.os.Looper
  * Foreground polling re-shows the overlay if the user retries quickly.
  */
 object AppBlockEnforcer {
-    private const val ENFORCE_DEBOUNCE_MS = 200L
-
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    @Volatile
-    private var lastEnforcedPackage: String? = null
-
-    @Volatile
-    private var lastEnforcedTimeMs: Long = 0
 
     fun enforce(context: Context, packageName: String) {
         if (packageName == context.packageName) return
@@ -28,20 +20,9 @@ object AppBlockEnforcer {
             return
         }
 
-        val now = System.currentTimeMillis()
-        synchronized(this) {
-            if (packageName == lastEnforcedPackage &&
-                now - lastEnforcedTimeMs < ENFORCE_DEBOUNCE_MS
-            ) {
-                return
-            }
-            lastEnforcedPackage = packageName
-            lastEnforcedTimeMs = now
+        val launchOverlay = Runnable {
+            BlockOverlayCoordinator.requestShow(context, packageName)
         }
-
-        // Show the overlay on top of the blocked app. Do not send HOME first —
-        // that prevents the overlay from appearing on many devices.
-        val launchOverlay = Runnable { BlockOverlayActivity.show(context, packageName) }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             launchOverlay.run()
         } else {

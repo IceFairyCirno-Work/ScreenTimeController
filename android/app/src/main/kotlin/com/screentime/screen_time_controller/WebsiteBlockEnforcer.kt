@@ -5,8 +5,7 @@ import android.os.Handler
 import android.os.Looper
 
 object WebsiteBlockEnforcer {
-    private const val ENFORCE_DEBOUNCE_MS = 400L
-    private const val OVERLAY_AFTER_NAVIGATE_MS = 350L
+    private const val ENFORCE_DEBOUNCE_MS = 800L
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -18,6 +17,9 @@ object WebsiteBlockEnforcer {
 
     fun enforce(context: Context, domain: String, browserPackage: String) {
         if (!shouldBlock(domain)) {
+            return
+        }
+        if (BlockOverlayCoordinator.shouldDeferWebsiteEnforce(browserPackage, context)) {
             return
         }
 
@@ -34,9 +36,11 @@ object WebsiteBlockEnforcer {
 
         val enforceAction = Runnable {
             BrowserSafeNavigation.navigateToSafePage(context, browserPackage)
-            mainHandler.postDelayed({
-                BlockOverlayActivity.show(context, browserPackage)
-            }, OVERLAY_AFTER_NAVIGATE_MS)
+            BlockOverlayCoordinator.requestShow(
+                context,
+                browserPackage,
+                afterNavigate = true,
+            )
         }
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
