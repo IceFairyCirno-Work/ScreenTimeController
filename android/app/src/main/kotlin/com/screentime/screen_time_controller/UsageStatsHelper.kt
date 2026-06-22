@@ -109,11 +109,25 @@ object UsageStatsHelper {
             .toInt()
             .coerceIn(0, 480)
 
+        val weekNightTotals = UsageEventProcessor(
+            context = context,
+            startTime = startOfWeek,
+            endTime = endTime,
+            clipToNightHours = true,
+        ).computePerPackage()
+        val weekNightUsageMinutes = (weekNightTotals.values.sum() / 60_000L)
+            .toInt()
+            .coerceIn(0, 480 * 7)
+
+        val weekApps = buildAppEntries(context, weekFromEvents)
+
         return mapOf(
             "todayTotalMs" to todayTotalMs,
             "weekTotalMs" to weekTotalMs,
             "nightUsageMinutes" to nightUsageMinutes,
+            "weekNightUsageMinutes" to weekNightUsageMinutes,
             "apps" to apps,
+            "weekApps" to weekApps,
         )
     }
 
@@ -143,6 +157,113 @@ object UsageStatsHelper {
      * Today's per-app metrics for the blocked-app detail screen: foreground opens,
      * foreground usage, and user-initiated unblock count.
      */
+    fun getDayPickupTimes(
+        context: Context,
+        year: Int,
+        month: Int,
+        dayOfMonth: Int,
+    ): Map<String, Any?> {
+        if (!hasUsagePermission(context)) {
+            return emptyPickupPayload()
+        }
+
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, year)
+            set(Calendar.MONTH, month - 1)
+            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startTime = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+        val endTime = min(cal.timeInMillis, System.currentTimeMillis())
+        if (startTime >= endTime) return emptyPickupPayload()
+
+        val pickups = collectPickupTimestamps(context, startTime, endTime)
+        if (pickups.isEmpty()) return emptyPickupPayload()
+
+        return mapOf(
+            "firstPickupMs" to pickups.first(),
+            "lastPickupMs" to pickups.last(),
+        )
+    }
+
+    private fun emptyPickupPayload(): Map<String, Any?> = mapOf(
+        "firstPickupMs" to null,
+        "lastPickupMs" to null,
+    )
+
+    /**
+     * Device pickups: [KEYGUARD_HIDDEN] when available (unlock), else debounced
+     * [SCREEN_INTERACTIVE] (screen on), else first foreground open per user app
+     * session gap.
+     */
+    private fun collectPickupTimestamps(
+        context: Context,
+        startTime: Long,
+        endTime: Long,
+    ): List<Long> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val events = usm.queryEvents(startTime, endTime) ?: return emptyList()
+
+        val keyguardPickups = mutableListOf<Long>()
+        val screenPickups = mutableListOf<Long>()
+        val foregroundPickups = mutableListOf<Long>()
+        var lastScreenPickup = 0L
+        var lastForegroundPickup = 0L
+        var inForeground = false
+
+        val event = UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val timestamp = event.timeStamp
+            if (timestamp < startTime || timestamp > endTime) continue
+
+            when (event.eventType) {
+                UsageEvents.Event.KEYGUARD_HIDDEN -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        keyguardPickups.add(timestamp)
+                    }
+                }
+                UsageEvents.Event.SCREEN_INTERACTIVE -> {
+                    if (timestamp - lastScreenPickup >= 60_000L) {
+                        screenPickups.add(timestamp)
+                        lastScreenPickup = timestamp
+                    }
+                }
+                UsageEvents.Event.MOVE_TO_FOREGROUND,
+                UsageEvents.Event.ACTIVITY_RESUMED,
+                -> {
+                    val packageName = event.packageName ?: continue
+                    if (packageDenylist.contains(packageName)) continue
+                    if (!shouldIncludePackage(context.packageManager, packageName)) continue
+
+                    val isResume = event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+                    if (isResume && inForeground) continue
+
+                    if (!inForeground && timestamp - lastForegroundPickup >= 60_000L) {
+                        foregroundPickups.add(timestamp)
+                        lastForegroundPickup = timestamp
+                    }
+                    inForeground = true
+                }
+                UsageEvents.Event.MOVE_TO_BACKGROUND,
+                UsageEvents.Event.ACTIVITY_PAUSED,
+                -> {
+                    inForeground = false
+                }
+            }
+        }
+
+        return when {
+            keyguardPickups.isNotEmpty() -> keyguardPickups.sorted()
+            screenPickups.isNotEmpty() -> screenPickups.sorted()
+            else -> foregroundPickups.sorted()
+        }
+    }
+
     fun getBlockedAppTodayStats(context: Context, packageName: String): Map<String, Any?> {
         val unblocks = BlockedAppStatsStore.getUnblockCount(context, packageName)
         if (!hasUsagePermission(context)) {
@@ -177,6 +298,73 @@ object UsageStatsHelper {
     ): Long? {
         if (!hasUsagePermission(context)) return null
 
+        val bounds = dayBoundsMillis(year, month, dayOfMonth) ?: return 0L
+
+        val totals = UsageEventProcessor(
+            context = context,
+            startTime = bounds.first,
+            endTime = bounds.second,
+            clipToNightHours = false,
+        ).computePerPackage()
+
+        return computeEventDayTotal(context, totals)
+    }
+
+    /**
+     * Night-window minutes (22:00–06:00) for one local calendar day.
+     * Returns null when usage permission is not granted.
+     */
+    fun getDayNightUsageMinutes(
+        context: Context,
+        year: Int,
+        month: Int,
+        dayOfMonth: Int,
+    ): Int? {
+        if (!hasUsagePermission(context)) return null
+
+        val bounds = dayBoundsMillis(year, month, dayOfMonth) ?: return 0
+
+        val nightTotals = UsageEventProcessor(
+            context = context,
+            startTime = bounds.first,
+            endTime = bounds.second,
+            clipToNightHours = true,
+        ).computePerPackage()
+
+        return (nightTotals.values.sum() / 60_000L)
+            .toInt()
+            .coerceIn(0, 480)
+    }
+
+    /**
+     * Per-app foreground usage for one local calendar day (no icons).
+     * Returns null when usage permission is not granted.
+     */
+    fun getDayApps(
+        context: Context,
+        year: Int,
+        month: Int,
+        dayOfMonth: Int,
+    ): List<Map<String, Any>>? {
+        if (!hasUsagePermission(context)) return null
+
+        val bounds = dayBoundsMillis(year, month, dayOfMonth) ?: return emptyList()
+
+        val totals = UsageEventProcessor(
+            context = context,
+            startTime = bounds.first,
+            endTime = bounds.second,
+            clipToNightHours = false,
+        ).computePerPackage()
+
+        return buildAppEntries(context, totals)
+    }
+
+    private fun dayBoundsMillis(
+        year: Int,
+        month: Int,
+        dayOfMonth: Int,
+    ): Pair<Long, Long>? {
         val cal = Calendar.getInstance().apply {
             set(Calendar.YEAR, year)
             set(Calendar.MONTH, month - 1)
@@ -189,16 +377,8 @@ object UsageStatsHelper {
         val startTime = cal.timeInMillis
         cal.add(Calendar.DAY_OF_MONTH, 1)
         val endTime = min(cal.timeInMillis, System.currentTimeMillis())
-        if (startTime >= endTime) return 0L
-
-        val totals = UsageEventProcessor(
-            context = context,
-            startTime = startTime,
-            endTime = endTime,
-            clipToNightHours = false,
-        ).computePerPackage()
-
-        return computeEventDayTotal(context, totals)
+        if (startTime >= endTime) return null
+        return startTime to endTime
     }
 
     fun getTodayUsageMs(context: Context, packageName: String): Long {
@@ -268,7 +448,9 @@ object UsageStatsHelper {
         "todayTotalMs" to 0L,
         "weekTotalMs" to 0L,
         "nightUsageMinutes" to 0,
+        "weekNightUsageMinutes" to 0,
         "apps" to emptyList<Map<String, Any>>(),
+        "weekApps" to emptyList<Map<String, Any>>(),
     )
 
     private fun startOfLocalDayMillis(): Long {

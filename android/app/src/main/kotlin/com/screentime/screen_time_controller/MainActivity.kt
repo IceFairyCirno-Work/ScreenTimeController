@@ -124,6 +124,94 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                         }
                     }
+                    "getDayNightUsageMinutes" -> {
+                        val year = call.argument<Int>("year")
+                        val month = call.argument<Int>("month")
+                        val day = call.argument<Int>("day")
+                        if (year == null || month == null || day == null) {
+                            result.error(
+                                "INVALID_ARGUMENT",
+                                "year, month, and day are required",
+                                null,
+                            )
+                        } else {
+                            executor().execute {
+                                try {
+                                    replySuccessOnMain(
+                                        result,
+                                        UsageStatsHelper.getDayNightUsageMinutes(
+                                            this,
+                                            year,
+                                            month,
+                                            day,
+                                        ),
+                                    )
+                                } catch (e: Exception) {
+                                    replyErrorOnMain(
+                                        result,
+                                        "DAY_NIGHT_USAGE_ERROR",
+                                        e.message,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    "getDayApps" -> {
+                        val year = call.argument<Int>("year")
+                        val month = call.argument<Int>("month")
+                        val day = call.argument<Int>("day")
+                        if (year == null || month == null || day == null) {
+                            result.error(
+                                "INVALID_ARGUMENT",
+                                "year, month, and day are required",
+                                null,
+                            )
+                        } else {
+                            executor().execute {
+                                try {
+                                    replySuccessOnMain(
+                                        result,
+                                        UsageStatsHelper.getDayApps(
+                                            this,
+                                            year,
+                                            month,
+                                            day,
+                                        ),
+                                    )
+                                } catch (e: Exception) {
+                                    replyErrorOnMain(result, "DAY_APPS_ERROR", e.message)
+                                }
+                            }
+                        }
+                    }
+                    "getDayPickupTimes" -> {
+                        val year = call.argument<Int>("year")
+                        val month = call.argument<Int>("month")
+                        val day = call.argument<Int>("day")
+                        if (year == null || month == null || day == null) {
+                            result.error(
+                                "INVALID_ARGUMENT",
+                                "year, month, and day are required",
+                                null,
+                            )
+                        } else {
+                            executor().execute {
+                                try {
+                                    replySuccessOnMain(
+                                        result,
+                                        UsageStatsHelper.getDayPickupTimes(
+                                            this,
+                                            year,
+                                            month,
+                                            day,
+                                        ),
+                                    )
+                                } catch (e: Exception) {
+                                    replyErrorOnMain(result, "DAY_PICKUP_ERROR", e.message)
+                                }
+                            }
+                        }
+                    }
                     "getBlockedAppTodayStats" -> {
                         val packageName = call.argument<String>("packageName")
                         if (packageName.isNullOrBlank()) {

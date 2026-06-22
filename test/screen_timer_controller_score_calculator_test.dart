@@ -245,5 +245,129 @@ void main() {
         });
       }
     });
+    group('weekBaselines', () {
+      test('uses daily averages from prior days this week (today excluded)', () {
+        final baselines = calculator.weekBaselines(
+          data: ScreenTimeData(
+            todayTotal: const Duration(minutes: 180),
+            weekTotal: const Duration(minutes: 700),
+            topApps: [
+              app('com.instagram.android', 'Instagram', 72),
+              app('com.example.work', 'Work', 50),
+              app('com.example.notes', 'Notes', 28),
+              app('com.example.other', 'Other', 30),
+            ],
+            weekTopApps: [
+              app('com.instagram.android', 'Instagram', 200),
+              app('com.example.work', 'Work', 300),
+              app('com.example.notes', 'Notes', 100),
+            ],
+            hasPermission: true,
+            nightUsageMinutes: 25,
+            weekNightUsageMinutes: 70,
+          ),
+          now: DateTime(2026, 6, 23), // Tuesday
+        );
+
+        expect(baselines.avgScreenMinutes, 520);
+        expect(baselines.avgSleepMinutes, 45);
+        expect(baselines.avgDistractionMinutes, 128);
+        expect(baselines.avgTop3Minutes, closeTo(450, 2));
+      });
+
+      test('returns zero screen baseline on Monday until rolling history loads', () {
+        final baselines = calculator.weekBaselines(
+          data: ScreenTimeData(
+            todayTotal: const Duration(minutes: 120),
+            weekTotal: const Duration(minutes: 120),
+            topApps: const [],
+            weekTopApps: [
+              app('com.example.a', 'A', 300),
+              app('com.example.b', 'B', 200),
+            ],
+            hasPermission: true,
+            nightUsageMinutes: 10,
+            weekNightUsageMinutes: 30,
+          ),
+          now: DateTime(2026, 6, 22), // Monday
+        );
+
+        expect(baselines.avgScreenMinutes, 0);
+        expect(baselines.avgSleepMinutes, 0);
+        expect(baselines.avgTop3Minutes, 0);
+      });
+
+      test('divides prior-week totals by prior day count', () {
+        final baselines = calculator.weekBaselines(
+          data: ScreenTimeData(
+            todayTotal: const Duration(minutes: 120),
+            weekTotal: const Duration(minutes: 600),
+            topApps: const [],
+            weekTopApps: [
+              app('com.example.a', 'A', 300),
+              app('com.example.b', 'B', 200),
+            ],
+            hasPermission: true,
+            nightUsageMinutes: 10,
+            weekNightUsageMinutes: 30,
+          ),
+          now: DateTime(2026, 6, 24), // Wednesday
+        );
+
+        expect(baselines.avgScreenMinutes, 240);
+        expect(baselines.avgSleepMinutes, 10);
+        expect(baselines.avgTop3Minutes, closeTo(500 / 2, 0.01));
+      });
+
+      test('returns zero sub-metric baselines when week history is missing', () {
+        final baselines = calculator.weekBaselines(
+          data: data(
+            todayMinutes: 90,
+            nightMinutes: 15,
+            topApps: [
+              app('com.instagram.android', 'Instagram', 30),
+              app('com.example.work', 'Work', 60),
+            ],
+          ),
+          now: DateTime(2026, 6, 22), // Monday — no prior days
+        );
+
+        expect(baselines.avgScreenMinutes, 0);
+        expect(baselines.avgSleepMinutes, 0);
+        expect(baselines.avgDistractionMinutes, 0);
+        expect(baselines.avgTop3Minutes, 0);
+      });
+    });
+
+    group('rollingBaselines', () {
+      test('averages prior days for all sub-metrics', () {
+        final baselines = calculator.rollingBaselines(
+          priorDays: [
+            PriorDayUsageSnapshot(
+              screenMinutes: 120,
+              nightMinutes: 20,
+              apps: [
+                app('com.instagram.android', 'Instagram', 40),
+                app('com.example.work', 'Work', 80),
+              ],
+            ),
+            PriorDayUsageSnapshot(
+              screenMinutes: 180,
+              nightMinutes: 30,
+              apps: [
+                app('com.instagram.android', 'Instagram', 60),
+                app('com.example.work', 'Work', 90),
+                app('com.example.notes', 'Notes', 30),
+              ],
+            ),
+          ],
+        );
+
+        expect(baselines.avgScreenMinutes, 150);
+        expect(baselines.avgSleepMinutes, 25);
+        expect(baselines.avgDistractionMinutes, 50);
+        expect(baselines.avgTop3Minutes, 150);
+      });
+    });
   });
 }

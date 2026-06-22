@@ -584,7 +584,7 @@ class _AnimatedSlide extends StatelessWidget {
           clipBehavior: Clip.hardEdge,
           children: [
             ...previousChildren,
-            if (currentChild != null) currentChild,
+            ?currentChild,
           ],
         );
       },

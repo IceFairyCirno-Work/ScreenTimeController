@@ -259,6 +259,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             distractingFolderPackages: distractingPackages,
             alwaysAllowedPackages: folderApps.alwaysAllowedPackageNames,
           );
+          final baselines = _calculator.weekBaselines(
+            data: provider.data,
+            distractingHabit: userData.habitToChange,
+            distractingFolderPackages: distractingPackages,
+            alwaysAllowedPackages: folderApps.alwaysAllowedPackageNames,
+          );
           final screenData = provider.data;
 
           return Stack(
@@ -367,7 +373,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         setState(() => _isScoreBreakdownOpen = false),
                     metrics: metrics,
                     usage: usage,
+                    baselines: baselines,
                     screenData: screenData,
+                    distractingHabit: userData.habitToChange,
+                    distractingFolderPackages: distractingPackages,
+                    alwaysAllowedPackages:
+                        folderApps.alwaysAllowedPackageNames,
                   ),
                 ),
             ],

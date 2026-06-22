@@ -32,6 +32,12 @@ enum UsageDataChannel {
         case "getDayTotalMs":
             result(nil)
 
+        case "getDayPickupTimes":
+            result([
+                "firstPickupMs": NSNull(),
+                "lastPickupMs": NSNull(),
+            ])
+
         case "getBlockedAppTodayStats":
             result(["opens": 0, "usageMs": 0, "unblocks": 0])
 

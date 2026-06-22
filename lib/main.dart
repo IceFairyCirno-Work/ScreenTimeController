@@ -27,8 +27,21 @@ import 'widgets/rule_notification_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Avoid blocking the first Flutter frame on a font CDN fetch after cold start.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Preload AppTheme font variants, then disable CDN fetches so later screens
+  // don't hit loadFontIfNecessary without a cached glyph. If preload fails
+  // (e.g. offline cold start), keep runtime fetching enabled as fallback.
+  try {
+    await GoogleFonts.pendingFonts([
+      GoogleFonts.inter(fontWeight: FontWeight.w400),
+      GoogleFonts.inter(fontWeight: FontWeight.w500),
+      GoogleFonts.inter(fontWeight: FontWeight.w600),
+      GoogleFonts.inter(fontWeight: FontWeight.w700),
+      GoogleFonts.orbitron(fontWeight: FontWeight.w700),
+    ]);
+    GoogleFonts.config.allowRuntimeFetching = false;
+  } catch (_) {
+    GoogleFonts.config.allowRuntimeFetching = true;
+  }
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

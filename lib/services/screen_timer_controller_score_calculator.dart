@@ -21,12 +21,54 @@ class ScoreUsageBreakdown {
   );
 }
 
+/// Week-average baselines for score-breakdown progress bars (Mon–today).
+class ScoreBreakdownBaselines {
+  static const defaultFirstPickupMinutes = 8 * 60.0;
+  static const defaultLastPickupMinutes = 22 * 60.0;
+
+  final double avgScreenMinutes;
+  final double avgSleepMinutes;
+  final double avgDistractionMinutes;
+  final double avgTop3Minutes;
+  final double avgFirstPickupMinutes;
+  final double avgLastPickupMinutes;
+
+  const ScoreBreakdownBaselines({
+    required this.avgScreenMinutes,
+    required this.avgSleepMinutes,
+    required this.avgDistractionMinutes,
+    required this.avgTop3Minutes,
+    this.avgFirstPickupMinutes = defaultFirstPickupMinutes,
+    this.avgLastPickupMinutes = defaultLastPickupMinutes,
+  });
+
+  static const zero = ScoreBreakdownBaselines(
+    avgScreenMinutes: 0,
+    avgSleepMinutes: 0,
+    avgDistractionMinutes: 0,
+    avgTop3Minutes: 0,
+    avgFirstPickupMinutes: defaultFirstPickupMinutes,
+    avgLastPickupMinutes: defaultLastPickupMinutes,
+  );
+}
+
+/// One prior calendar day of usage used for rolling breakdown baselines.
+class PriorDayUsageSnapshot {
+  final double screenMinutes;
+  final double nightMinutes;
+  final List<AppUsageItem> apps;
+
+  const PriorDayUsageSnapshot({
+    required this.screenMinutes,
+    required this.nightMinutes,
+    required this.apps,
+  });
+}
+
 class ScreenTimerControllerScoreCalculator {
   static const nightBudgetMinutes = 120;
-  /// Length of the sleep window (22:00–06:00) used in breakdown bars.
-  static const nightWindowMinutes = 8 * 60;
   static const restTop3Penalty = 0.75;
-  /// Reference for the daily screen-time bar (8 h).
+  /// Reference for onboarding estimate when real usage is unavailable (iOS).
   static const dailyScreenTimeReferenceMinutes = 8 * 60;
 
   static const _distractingPackages = {
@@ -72,7 +114,7 @@ class ScreenTimerControllerScoreCalculator {
     final sleepScore = _sleepScore(sleepMinutes);
 
     final distractionMinutes = _distractionMinutes(
-      data,
+      data.topApps,
       distractingHabit,
       distractingFolderPackages,
       alwaysAllowedPackages,
@@ -81,7 +123,7 @@ class ScreenTimerControllerScoreCalculator {
         todayMinutes > 0 ? distractionMinutes / todayMinutes : 0.0;
     final focus = (100 * (1 - distractionRatio)).round().clamp(0, 100);
 
-    final top3Minutes = _top3Minutes(data);
+    final top3Minutes = _top3Minutes(data.topApps);
     final concentration =
         todayMinutes > 0 ? top3Minutes / todayMinutes : 0.0;
     final rest =
@@ -139,13 +181,165 @@ class ScreenTimerControllerScoreCalculator {
 
     return ScoreUsageBreakdown(
       distractionMinutes: _distractionMinutes(
-        data,
+        data.topApps,
         distractingHabit,
         distractingFolderPackages,
         alwaysAllowedPackages,
       ),
-      top3Minutes: _top3Minutes(data),
+      top3Minutes: _top3Minutes(data.topApps),
     );
+  }
+
+  /// Daily averages from prior days this week (today excluded) for breakdown bars.
+  ScoreBreakdownBaselines weekBaselines({
+    required ScreenTimeData data,
+    String? distractingHabit,
+    Set<String> distractingFolderPackages = const {},
+    Set<String> alwaysAllowedPackages = const {},
+    DateTime? now,
+  }) {
+    if (!data.hasPermission) return ScoreBreakdownBaselines.zero;
+
+    final days = _daysInCurrentWeek(now);
+    if (days <= 0) return ScoreBreakdownBaselines.zero;
+
+    final todayMinutes = data.todayTotal.inMinutes.toDouble();
+    final todaySleep = data.nightUsageMinutes.toDouble();
+    final todayDistraction = _distractionMinutes(
+      data.topApps,
+      distractingHabit,
+      distractingFolderPackages,
+      alwaysAllowedPackages,
+    ).toDouble();
+    final todayTop3 = _top3Minutes(data.topApps).toDouble();
+
+    final weekDistraction = _distractionMinutes(
+      data.weekTopApps,
+      distractingHabit,
+      distractingFolderPackages,
+      alwaysAllowedPackages,
+    ).toDouble();
+    final weekTop3 = _top3Minutes(data.weekTopApps).toDouble();
+
+    final avgScreen = _dailyAvgExcludingToday(
+      weekTotal: data.weekTotal.inMinutes.toDouble(),
+      today: todayMinutes,
+      weekday: days,
+    );
+    final avgSleep = _dailyAvgExcludingToday(
+      weekTotal: data.weekNightUsageMinutes.toDouble(),
+      today: todaySleep,
+      weekday: days,
+    );
+    final avgDistraction = _dailyAvgExcludingToday(
+      weekTotal: weekDistraction,
+      today: todayDistraction,
+      weekday: days,
+    );
+    final avgTop3 = _dailyAvgExcludingToday(
+      weekTotal: weekTop3,
+      today: todayTop3,
+      weekday: days,
+    );
+
+    return ScoreBreakdownBaselines(
+      avgScreenMinutes: avgScreen,
+      avgSleepMinutes: avgSleep,
+      avgDistractionMinutes: avgDistraction,
+      avgTop3Minutes: avgTop3,
+    );
+  }
+
+  /// Averages from prior calendar days (today excluded) for rolling baselines.
+  ScoreBreakdownBaselines rollingBaselines({
+    required List<PriorDayUsageSnapshot> priorDays,
+    String? distractingHabit,
+    Set<String> distractingFolderPackages = const {},
+    Set<String> alwaysAllowedPackages = const {},
+  }) {
+    if (priorDays.isEmpty) return ScoreBreakdownBaselines.zero;
+
+    final screens = <double>[];
+    final nights = <double>[];
+    final distractions = <double>[];
+    final top3s = <double>[];
+
+    for (final day in priorDays) {
+      if (day.screenMinutes <= 0) continue;
+      screens.add(day.screenMinutes);
+      nights.add(day.nightMinutes);
+      distractions.add(
+        _distractionMinutes(
+          day.apps,
+          distractingHabit,
+          distractingFolderPackages,
+          alwaysAllowedPackages,
+        ).toDouble(),
+      );
+      top3s.add(_top3Minutes(day.apps).toDouble());
+    }
+
+    return ScoreBreakdownBaselines(
+      avgScreenMinutes: _mean(screens),
+      avgSleepMinutes: _mean(nights),
+      avgDistractionMinutes: _mean(distractions),
+      avgTop3Minutes: _mean(top3s),
+    );
+  }
+
+  static double _mean(List<double> values) {
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  /// Merges [rolling] averages into [primary] wherever primary is zero.
+  ScoreBreakdownBaselines mergeBaselines({
+    required ScoreBreakdownBaselines primary,
+    required ScoreBreakdownBaselines rolling,
+  }) {
+    return ScoreBreakdownBaselines(
+      avgScreenMinutes:
+          _preferNonZero(primary.avgScreenMinutes, rolling.avgScreenMinutes),
+      avgSleepMinutes:
+          _preferNonZero(primary.avgSleepMinutes, rolling.avgSleepMinutes),
+      avgDistractionMinutes: _preferNonZero(
+        primary.avgDistractionMinutes,
+        rolling.avgDistractionMinutes,
+      ),
+      avgTop3Minutes:
+          _preferNonZero(primary.avgTop3Minutes, rolling.avgTop3Minutes),
+      avgFirstPickupMinutes: _preferNonZero(
+        primary.avgFirstPickupMinutes,
+        rolling.avgFirstPickupMinutes,
+      ),
+      avgLastPickupMinutes: _preferNonZero(
+        primary.avgLastPickupMinutes,
+        rolling.avgLastPickupMinutes,
+      ),
+    );
+  }
+
+  static double _preferNonZero(double primary, double fallback) {
+    if (primary > 0) return primary;
+    if (fallback > 0) return fallback;
+    return 0;
+  }
+
+  static double _dailyAvgExcludingToday({
+    required double weekTotal,
+    required double today,
+    required int weekday,
+  }) {
+    final priorDays = weekday - 1;
+    if (priorDays <= 0) return 0;
+    final prior = weekTotal - today;
+    if (prior <= 0) return 0;
+    return prior / priorDays;
+  }
+
+  static int _daysInCurrentWeek(DateTime? now) {
+    final moment = now ?? DateTime.now();
+    return moment.weekday.clamp(1, 7);
   }
 
   int _sleepScore(int sleepMinutes) =>
@@ -154,13 +348,13 @@ class ScreenTimerControllerScoreCalculator {
           .clamp(0, 100);
 
   int _distractionMinutes(
-    ScreenTimeData data,
+    List<AppUsageItem> apps,
     String? habit,
     Set<String> distractingFolderPackages,
     Set<String> alwaysAllowedPackages,
   ) {
     var minutes = 0;
-    for (final app in data.topApps) {
+    for (final app in apps) {
       if (_isDistracting(
         app.packageName,
         app.appName,
@@ -174,8 +368,8 @@ class ScreenTimerControllerScoreCalculator {
     return minutes;
   }
 
-  int _top3Minutes(ScreenTimeData data) {
-    final sorted = List<AppUsageItem>.from(data.topApps)
+  int _top3Minutes(List<AppUsageItem> apps) {
+    final sorted = List<AppUsageItem>.from(apps)
       ..sort((a, b) => b.usage.compareTo(a.usage));
     return sorted
         .take(3)

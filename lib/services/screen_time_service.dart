@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/device_pickup_times.dart';
 import '../models/screen_time_data.dart';
 import '../utils/platform_capabilities.dart';
 import 'platform/app_selection_service.dart';
@@ -54,7 +55,10 @@ class ScreenTimeService {
     final weekTotalMs = (payload['weekTotalMs'] as num?)?.toInt() ?? 0;
     final nightUsageMinutes =
         (payload['nightUsageMinutes'] as num?)?.toInt() ?? 0;
+    final weekNightUsageMinutes =
+        (payload['weekNightUsageMinutes'] as num?)?.toInt() ?? 0;
     final appsRaw = payload['apps'] as List<Object?>? ?? [];
+    final weekAppsRaw = payload['weekApps'] as List<Object?>? ?? [];
 
     final appEntries = <({String package, String name, int usageMs})>[];
     for (final item in appsRaw) {
@@ -70,6 +74,8 @@ class ScreenTimeService {
       appEntries.add((package: package, name: name, usageMs: usageMs));
     }
 
+    final weekAppEntries = _parseAppEntries(weekAppsRaw);
+
     final topApps = await Future.wait(
       appEntries.map((entry) async {
         final iconBytes = await getAppIcon(entry.package);
@@ -82,13 +88,44 @@ class ScreenTimeService {
       }),
     );
 
+    final weekTopApps = weekAppEntries
+        .map(
+          (entry) => AppUsageItem(
+            appName: entry.name,
+            packageName: entry.package,
+            usage: Duration(milliseconds: entry.usageMs),
+          ),
+        )
+        .toList();
+
     return ScreenTimeData(
       todayTotal: Duration(milliseconds: todayTotalMs),
       weekTotal: Duration(milliseconds: weekTotalMs),
       topApps: topApps,
+      weekTopApps: weekTopApps,
       hasPermission: true,
       nightUsageMinutes: nightUsageMinutes,
+      weekNightUsageMinutes: weekNightUsageMinutes,
     );
+  }
+
+  List<({String package, String name, int usageMs})> _parseAppEntries(
+    List<Object?> raw,
+  ) {
+    final entries = <({String package, String name, int usageMs})>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item.cast<String, dynamic>());
+      final usageMs = (map['usageMs'] as num?)?.toInt() ?? 0;
+      if (usageMs < minUsageMs) continue;
+
+      final package = map['package'] as String? ?? '';
+      final name = map['name'] as String? ?? package;
+      if (package.isEmpty) continue;
+
+      entries.add((package: package, name: name, usageMs: usageMs));
+    }
+    return entries;
   }
 
   Future<Uint8List?> getAppIcon(String packageName) =>
@@ -102,6 +139,34 @@ class ScreenTimeService {
   ///
   /// Returns `null` when usage permission is missing or the native call fails.
   Future<int?> fetchDayTotalMs(DateTime day) => _platform.fetchDayTotalMs(day);
+
+  Future<int?> fetchDayNightUsageMinutes(DateTime day) =>
+      _platform.fetchDayNightUsageMinutes(day);
+
+  Future<List<AppUsageItem>> fetchDayApps(DateTime day) =>
+      _platform.fetchDayApps(day);
+
+  Future<DevicePickupTimes> fetchDayPickupTimes(DateTime day) async {
+    try {
+      final result = await _platform.fetchDayPickupTimes(day);
+      if (result == null) return DevicePickupTimes.empty;
+
+      final firstMs = (result['firstPickupMs'] as num?)?.toInt();
+      final lastMs = (result['lastPickupMs'] as num?)?.toInt();
+
+      return DevicePickupTimes(
+        firstPickup: firstMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(firstMs)
+            : null,
+        lastPickup: lastMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(lastMs)
+            : null,
+      );
+    } catch (e) {
+      debugPrint('Day pickup fetch error: $e');
+      return DevicePickupTimes.empty;
+    }
+  }
 
   Future<BlockedAppTodayStats> fetchBlockedAppTodayStats(
     String packageName,

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../models/device_pickup_times.dart';
 import '../../models/screen_time_data.dart';
 import '../../models/screen_timer_controller_metrics.dart';
 import '../../services/screen_time_service.dart';
@@ -9,6 +10,7 @@ import '../../services/screen_timer_controller_score_calculator.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/home/metrics_row.dart';
 import '../../widgets/shared/circle_icon_button.dart';
+import '../../widgets/shared/relative_progress_bar.dart';
 
 /// Full-screen score breakdown with radial gauge, sub-metric pills, and bars.
 ///
@@ -18,14 +20,22 @@ class ScoreBreakdownScreen extends StatefulWidget {
   final VoidCallback onClose;
   final ScreenTimerControllerMetrics metrics;
   final ScoreUsageBreakdown usage;
+  final ScoreBreakdownBaselines baselines;
   final ScreenTimeData screenData;
+  final String? distractingHabit;
+  final Set<String> distractingFolderPackages;
+  final Set<String> alwaysAllowedPackages;
 
   const ScoreBreakdownScreen({
     super.key,
     required this.onClose,
     required this.metrics,
     required this.usage,
+    required this.baselines,
     required this.screenData,
+    this.distractingHabit,
+    this.distractingFolderPackages = const {},
+    this.alwaysAllowedPackages = const {},
   });
 
   @override
@@ -35,6 +45,7 @@ class ScoreBreakdownScreen extends StatefulWidget {
 class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
     with SingleTickerProviderStateMixin {
   static const _maxDayOffset = 6;
+  static const _scrollHorizontalPadding = 24.0;
 
   final _screenTimeService = ScreenTimeService();
   late final AnimationController _barsController;
@@ -42,6 +53,12 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
   int _dayOffset = 0;
   int? _historicalTotalMs;
   bool _loadingHistorical = false;
+  DevicePickupTimes? _pickupTimes;
+  bool _loadingPickups = false;
+  double _avgFirstPickupMinutes = 0;
+  double _avgLastPickupMinutes = 0;
+  ScoreBreakdownBaselines? _rollingBaselines;
+  final _calculator = ScreenTimerControllerScoreCalculator();
 
   @override
   void initState() {
@@ -55,7 +72,72 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
       curve: Curves.easeOutCubic,
     );
     _barsController.forward();
-    if (_dayOffset > 0) _loadHistoricalTotal();
+    _loadWeekPickupBaselines();
+    _loadRollingBaselines();
+    _loadSelectedDayData();
+  }
+
+  ScoreBreakdownBaselines get _effectiveBaselines {
+    final merged = _rollingBaselines == null
+        ? widget.baselines
+        : _calculator.mergeBaselines(
+            primary: widget.baselines,
+            rolling: _rollingBaselines!,
+          );
+    return ScoreBreakdownBaselines(
+      avgScreenMinutes: merged.avgScreenMinutes,
+      avgSleepMinutes: merged.avgSleepMinutes,
+      avgDistractionMinutes: merged.avgDistractionMinutes,
+      avgTop3Minutes: merged.avgTop3Minutes,
+      avgFirstPickupMinutes: _avgFirstPickupMinutes > 0
+          ? _avgFirstPickupMinutes
+          : merged.avgFirstPickupMinutes,
+      avgLastPickupMinutes: _avgLastPickupMinutes > 0
+          ? _avgLastPickupMinutes
+          : merged.avgLastPickupMinutes,
+    );
+  }
+
+  Future<void> _loadRollingBaselines() async {
+    final screenData = widget.screenData;
+    if (!screenData.hasPermission) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final priorDayResults = await Future.wait(
+      List.generate(6, (offset) async {
+        final day = today.subtract(Duration(days: offset + 1));
+        final results = await Future.wait([
+          _screenTimeService.fetchDayTotalMs(day),
+          _screenTimeService.fetchDayNightUsageMinutes(day),
+          _screenTimeService.fetchDayApps(day),
+        ]);
+
+        final totalMs = results[0] as int?;
+        if (totalMs == null || totalMs <= 0) return null;
+
+        return PriorDayUsageSnapshot(
+          screenMinutes: totalMs / 60000.0,
+          nightMinutes: (results[1] as int?)?.toDouble() ?? 0,
+          apps: results[2] as List<AppUsageItem>,
+        );
+      }),
+    );
+
+    final priorDays = priorDayResults.whereType<PriorDayUsageSnapshot>().toList();
+
+    if (!mounted) return;
+    if (priorDays.isEmpty) return;
+
+    final rolling = _calculator.rollingBaselines(
+      priorDays: priorDays,
+      distractingHabit: widget.distractingHabit,
+      distractingFolderPackages: widget.distractingFolderPackages,
+      alwaysAllowedPackages: widget.alwaysAllowedPackages,
+    );
+
+    setState(() => _rollingBaselines = rolling);
+    _barsController.forward(from: 0);
   }
 
   @override
@@ -93,25 +175,90 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
     return '${weekdays[day.weekday - 1]}, ${months[day.month - 1]} ${day.day}';
   }
 
-  Future<void> _loadHistoricalTotal() async {
-    setState(() => _loadingHistorical = true);
-    final ms = await _screenTimeService.fetchDayTotalMs(_selectedDay);
+  Future<void> _loadSelectedDayData() async {
+    final loadingHistorical = _dayOffset > 0;
+    setState(() {
+      if (loadingHistorical) _loadingHistorical = true;
+      _loadingPickups = true;
+      if (loadingHistorical) _historicalTotalMs = null;
+      _pickupTimes = null;
+    });
+
+    final day = _selectedDay;
+    final msFuture = loadingHistorical
+        ? _screenTimeService.fetchDayTotalMs(day)
+        : Future<int?>.value(null);
+    final results = await Future.wait([
+      msFuture,
+      _screenTimeService.fetchDayPickupTimes(day),
+    ]);
+
     if (!mounted) return;
     setState(() {
-      _historicalTotalMs = ms;
-      _loadingHistorical = false;
+      if (loadingHistorical) {
+        _historicalTotalMs = results[0] as int?;
+        _loadingHistorical = false;
+      }
+      _pickupTimes = results[1] as DevicePickupTimes;
+      _loadingPickups = false;
+    });
+  }
+
+  Future<void> _loadWeekPickupBaselines() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - DateTime.monday));
+
+    final firsts = <double>[];
+    final lasts = <double>[];
+    // Prior days only — today is the reading, not the baseline.
+    for (var i = 0; i < today.weekday - 1; i++) {
+      final day = monday.add(Duration(days: i));
+      final pickups = await _screenTimeService.fetchDayPickupTimes(day);
+      final first = pickups.firstPickup;
+      final last = pickups.lastPickup;
+      if (first != null) {
+        firsts.add(RelativeProgressBar.minutesSinceMidnight(first));
+      }
+      if (last != null) {
+        lasts.add(RelativeProgressBar.minutesSinceMidnight(last));
+      }
+    }
+
+    // Monday (or no prior-week pickups): fall back to the last 6 days.
+    if (firsts.isEmpty || lasts.isEmpty) {
+      for (var offset = 1; offset <= 6; offset++) {
+        final day = today.subtract(Duration(days: offset));
+        final pickups = await _screenTimeService.fetchDayPickupTimes(day);
+        final first = pickups.firstPickup;
+        final last = pickups.lastPickup;
+        if (first != null) {
+          firsts.add(RelativeProgressBar.minutesSinceMidnight(first));
+        }
+        if (last != null) {
+          lasts.add(RelativeProgressBar.minutesSinceMidnight(last));
+        }
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (firsts.isNotEmpty) {
+        _avgFirstPickupMinutes =
+            firsts.reduce((a, b) => a + b) / firsts.length;
+      }
+      if (lasts.isNotEmpty) {
+        _avgLastPickupMinutes = lasts.reduce((a, b) => a + b) / lasts.length;
+      }
     });
   }
 
   void _shiftDay(int delta) {
     final next = (_dayOffset + delta).clamp(0, _maxDayOffset);
     if (next == _dayOffset) return;
-    setState(() {
-      _dayOffset = next;
-      _historicalTotalMs = null;
-    });
+    setState(() => _dayOffset = next);
     _barsController.forward(from: 0);
-    if (next > 0) _loadHistoricalTotal();
+    _loadSelectedDayData();
   }
 
   Duration get _displayedScreenTime {
@@ -121,10 +268,29 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
     return Duration(milliseconds: ms);
   }
 
+  /// Inset for score/insight content above the progress bars.
+  Widget _contentInset(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _scrollHorizontalPadding),
+      child: child,
+    );
+  }
+
+  /// Wider horizontal inset so progress tracks span more of the screen.
+  Widget _wideProgressBars(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: RelativeProgressBar.trackScreenInset,
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final metrics = widget.metrics;
     final usage = widget.usage;
+    final baselines = _effectiveBaselines;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Material(
@@ -147,53 +313,78 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
                 animation: _barsAnimation,
                 builder: (context, _) {
                   return SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(24, 8, 24, 8 + bottomInset + 72),
+                    padding: EdgeInsets.only(
+                      top: 8,
+                      bottom: 8 + bottomInset + 72,
+                    ),
                     child: Column(
                       children: [
                         if (_isToday) ...[
-                          _SemiCircularScoreGauge(
-                            score: metrics.score,
-                            animationProgress: _barsAnimation.value,
+                          _contentInset(
+                            _SemiCircularScoreGauge(
+                              score: metrics.score,
+                              animationProgress: _barsAnimation.value,
+                            ),
                           ),
                           const SizedBox(height: 12),
-                          MetricsRow(
-                            sleepScore: metrics.sleepScore,
-                            focus: metrics.focus,
-                            rest: metrics.rest,
-                            showBracket: false,
-                            animationProgress: _barsAnimation.value,
+                          _contentInset(
+                            MetricsRow(
+                              sleepScore: metrics.sleepScore,
+                              focus: metrics.focus,
+                              rest: metrics.rest,
+                              showBracket: false,
+                              animationProgress: _barsAnimation.value,
+                            ),
                           ),
                           const SizedBox(height: 28),
-                          const _InsightBlock(),
+                          _contentInset(const _InsightBlock()),
                           const SizedBox(height: 28),
-                          _AnalyticalBarsSection(
-                            screenTime: _displayedScreenTime,
-                            metrics: metrics,
-                            usage: usage,
-                            isLoading: false,
-                            showSubCategoryBars: true,
-                            animationProgress: _barsAnimation.value,
+                          _wideProgressBars(
+                            _AnalyticalBarsSection(
+                              screenTime: _displayedScreenTime,
+                              metrics: metrics,
+                              usage: usage,
+                              baselines: baselines,
+                              avgFirstPickupMinutes: _avgFirstPickupMinutes,
+                              avgLastPickupMinutes: _avgLastPickupMinutes,
+                              pickupTimes: _pickupTimes,
+                              loadingPickups: _loadingPickups,
+                              isLoading: false,
+                              showSubCategoryBars: true,
+                              animationProgress: _barsAnimation.value,
+                            ),
                           ),
                         ] else ...[
                           const SizedBox(height: 12),
-                          Text(
-                            'Daily screen time',
-                            style: AppTheme.headingMedium.copyWith(fontSize: 18),
+                          _contentInset(
+                            Text(
+                              'Daily screen time',
+                              style: AppTheme.headingMedium.copyWith(fontSize: 18),
+                            ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'Detailed score breakdown is available for today.',
-                            style: AppTheme.bodyMedium,
-                            textAlign: TextAlign.center,
+                          _contentInset(
+                            Text(
+                              'Detailed score breakdown is available for today.',
+                              style: AppTheme.bodyMedium,
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                           const SizedBox(height: 24),
-                          _AnalyticalBarsSection(
-                            screenTime: _displayedScreenTime,
-                            metrics: metrics,
-                            usage: usage,
-                            isLoading: _loadingHistorical,
-                            showSubCategoryBars: false,
-                            animationProgress: _barsAnimation.value,
+                          _wideProgressBars(
+                            _AnalyticalBarsSection(
+                              screenTime: _displayedScreenTime,
+                              metrics: metrics,
+                              usage: usage,
+                              baselines: baselines,
+                              avgFirstPickupMinutes: _avgFirstPickupMinutes,
+                              avgLastPickupMinutes: _avgLastPickupMinutes,
+                              pickupTimes: _pickupTimes,
+                              loadingPickups: _loadingPickups,
+                              isLoading: _loadingHistorical,
+                              showSubCategoryBars: false,
+                              animationProgress: _barsAnimation.value,
+                            ),
                           ),
                         ],
                       ],
@@ -439,6 +630,11 @@ class _AnalyticalBarsSection extends StatelessWidget {
   final Duration screenTime;
   final ScreenTimerControllerMetrics metrics;
   final ScoreUsageBreakdown usage;
+  final ScoreBreakdownBaselines baselines;
+  final double avgFirstPickupMinutes;
+  final double avgLastPickupMinutes;
+  final DevicePickupTimes? pickupTimes;
+  final bool loadingPickups;
   final bool isLoading;
   final bool showSubCategoryBars;
   final double animationProgress;
@@ -447,6 +643,11 @@ class _AnalyticalBarsSection extends StatelessWidget {
     required this.screenTime,
     required this.metrics,
     required this.usage,
+    required this.baselines,
+    required this.avgFirstPickupMinutes,
+    required this.avgLastPickupMinutes,
+    required this.pickupTimes,
+    required this.loadingPickups,
     required this.isLoading,
     required this.showSubCategoryBars,
     required this.animationProgress,
@@ -467,165 +668,125 @@ class _AnalyticalBarsSection extends StatelessWidget {
     }
 
     final todayMinutes = screenTime.inMinutes;
-    final screenRef =
-        ScreenTimerControllerScoreCalculator.dailyScreenTimeReferenceMinutes;
+    final baselines = this.baselines;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ProgressBarBlock(
+        RelativeProgressBar(
           title: 'Screen Time',
-          subtitle: todayMinutes > 0
-              ? '${_formatMinutes(todayMinutes)} today'
-              : 'No screen time recorded',
-          valueLabel: todayMinutes > 0
-              ? '${_formatMinutes(todayMinutes)} / ${_formatMinutes(screenRef)}'
+          todayLabel: todayMinutes > 0
+              ? RelativeProgressBar.formatMinutes(todayMinutes)
               : '0m',
-          progress: todayMinutes > 0
-              ? (todayMinutes / screenRef).clamp(0.0, 1.0)
-              : 0,
+          currentValue: todayMinutes.toDouble(),
+          averageValue: baselines.avgScreenMinutes,
+          isLowerBetter: true,
+          minimumAverageWhenEmpty: RelativeProgressBar.durationMinimumBaseline,
           animationProgress: animationProgress,
-          accentColor: AppTheme.screenTimerControllerMint,
+        ),
+        const SizedBox(height: RelativeProgressBar.titleToBarSpacing),
+        _buildPickupProgressBar(
+          title: 'First Pickup',
+          pickup: pickupTimes?.firstPickup,
+          avgMinutes: avgFirstPickupMinutes,
+          isLowerBetter: false,
+        ),
+        const SizedBox(height: RelativeProgressBar.titleToBarSpacing),
+        _buildPickupProgressBar(
+          title: 'Last Pickup',
+          pickup: pickupTimes?.lastPickup,
+          avgMinutes: avgLastPickupMinutes,
+          isLowerBetter: true,
         ),
         if (showSubCategoryBars) ...[
-          const SizedBox(height: 20),
-          _ProgressBarBlock(
+          const SizedBox(height: RelativeProgressBar.titleToBarSpacing),
+          RelativeProgressBar(
             title: 'Sleep',
-            subtitle:
-                '${_formatMinutes(metrics.sleep)} phone use during 10pm–6am',
-            valueLabel:
-                '${_formatMinutes(metrics.sleep)} / ${_formatMinutes(ScreenTimerControllerScoreCalculator.nightWindowMinutes)}',
-            progress: metrics.sleep > 0
-                ? (metrics.sleep /
-                        ScreenTimerControllerScoreCalculator.nightWindowMinutes)
-                    .clamp(0.0, 1.0)
-                : 0,
+            todayLabel: RelativeProgressBar.formatMinutes(metrics.sleep),
+            currentValue: metrics.sleep.toDouble(),
+            averageValue: baselines.avgSleepMinutes,
+            isLowerBetter: true,
+            minimumAverageWhenEmpty: RelativeProgressBar.durationMinimumBaseline,
             animationProgress: animationProgress,
-            accentColor: AppTheme.screenTimerControllerMintGlow,
-            invertFill: true,
           ),
-          const SizedBox(height: 20),
-          _ProgressBarBlock(
+          const SizedBox(height: RelativeProgressBar.titleToBarSpacing),
+          RelativeProgressBar(
             title: 'Focus',
-            subtitle: todayMinutes > 0
-                ? '${_formatMinutes(usage.distractionMinutes)} in distracting apps'
-                : 'No distracting usage',
-            valueLabel: todayMinutes > 0
-                ? '${_formatMinutes(usage.distractionMinutes)} / ${_formatMinutes(todayMinutes)}'
+            todayLabel: todayMinutes > 0
+                ? RelativeProgressBar.formatMinutes(usage.distractionMinutes)
                 : '0m',
-            progress: todayMinutes > 0
-                ? (usage.distractionMinutes / todayMinutes).clamp(0.0, 1.0)
-                : 0,
+            currentValue: usage.distractionMinutes.toDouble(),
+            averageValue: baselines.avgDistractionMinutes,
+            isLowerBetter: true,
+            minimumAverageWhenEmpty: RelativeProgressBar.durationMinimumBaseline,
             animationProgress: animationProgress,
-            accentColor: AppTheme.highlightBlue,
           ),
-          const SizedBox(height: 20),
-          _ProgressBarBlock(
+          const SizedBox(height: RelativeProgressBar.titleToBarSpacing),
+          RelativeProgressBar(
             title: 'Rest',
-            subtitle: todayMinutes > 0
-                ? '${_formatMinutes(usage.top3Minutes)} in your top 3 apps'
-                : 'Usage spread across apps',
-            valueLabel: todayMinutes > 0
-                ? '${_formatMinutes(usage.top3Minutes)} / ${_formatMinutes(todayMinutes)}'
+            todayLabel: todayMinutes > 0
+                ? RelativeProgressBar.formatMinutes(usage.top3Minutes)
                 : '0m',
-            progress: todayMinutes > 0
-                ? (usage.top3Minutes / todayMinutes).clamp(0.0, 1.0)
-                : 0,
+            currentValue: usage.top3Minutes.toDouble(),
+            averageValue: baselines.avgTop3Minutes,
+            isLowerBetter: true,
+            minimumAverageWhenEmpty: RelativeProgressBar.durationMinimumBaseline,
             animationProgress: animationProgress,
-            accentColor: AppTheme.screenTimerControllerMintDim,
           ),
         ],
       ],
     );
   }
 
-  static String _formatMinutes(int minutes) {
-    if (minutes < 60) return '${minutes}m';
-    final hours = minutes ~/ 60;
-    final rem = minutes % 60;
-    if (rem == 0) return '${hours}h';
-    return '${hours}h ${rem}m';
-  }
-}
-
-class _ProgressBarBlock extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String valueLabel;
-  final double progress;
-  final double animationProgress;
-  final Color accentColor;
-  final bool invertFill;
-
-  const _ProgressBarBlock({
-    required this.title,
-    required this.subtitle,
-    required this.valueLabel,
-    required this.progress,
-    required this.animationProgress,
-    required this.accentColor,
-    this.invertFill = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final target = invertFill ? (1 - progress).clamp(0.0, 1.0) : progress;
-    final fill = (target * animationProgress).clamp(0.0, 1.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              valueLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(subtitle, style: AppTheme.bodySmall),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
+  Widget _buildPickupProgressBar({
+    required String title,
+    required DateTime? pickup,
+    required double avgMinutes,
+    required bool isLowerBetter,
+  }) {
+    if (loadingPickups) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
           child: SizedBox(
-            height: 8,
-            width: double.infinity,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: AppTheme.surfaceLight),
-                FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: fill.clamp(0.0, 1.0),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          accentColor.withValues(alpha: 0.7),
-                          accentColor,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              color: AppTheme.screenTimerControllerMint,
+              strokeWidth: 2,
             ),
           ),
         ),
-      ],
+      );
+    }
+
+    if (pickup == null || avgMinutes <= 0) {
+      return Row(
+        children: [
+          Text(
+            title,
+            style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '—',
+            style: AppTheme.bodySmall.copyWith(
+              color: AppTheme.textHint,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return RelativeProgressBar(
+      title: title,
+      todayLabel: RelativeProgressBar.formatTime24(pickup),
+      currentValue: RelativeProgressBar.minutesSinceMidnight(pickup),
+      averageValue: avgMinutes,
+      isLowerBetter: isLowerBetter,
+      animationProgress: animationProgress,
     );
   }
 }

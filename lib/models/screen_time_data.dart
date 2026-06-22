@@ -18,15 +18,19 @@ class ScreenTimeData {
   final Duration todayTotal;
   final Duration weekTotal;
   final List<AppUsageItem> topApps;
+  final List<AppUsageItem> weekTopApps;
   final bool hasPermission;
   final int nightUsageMinutes;
+  final int weekNightUsageMinutes;
 
   const ScreenTimeData({
     required this.todayTotal,
     required this.weekTotal,
     required this.topApps,
     required this.hasPermission,
+    this.weekTopApps = const [],
     this.nightUsageMinutes = 0,
+    this.weekNightUsageMinutes = 0,
   });
 
   static const empty = ScreenTimeData(
@@ -34,7 +38,9 @@ class ScreenTimeData {
     weekTotal: Duration.zero,
     topApps: [],
     hasPermission: false,
+    weekTopApps: [],
     nightUsageMinutes: 0,
+    weekNightUsageMinutes: 0,
   );
 
   String get formattedToday => _formatDuration(todayTotal);
@@ -71,15 +77,20 @@ class ScreenTimeData {
     Duration? todayTotal,
     Duration? weekTotal,
     List<AppUsageItem>? topApps,
+    List<AppUsageItem>? weekTopApps,
     bool? hasPermission,
     int? nightUsageMinutes,
+    int? weekNightUsageMinutes,
   }) {
     return ScreenTimeData(
       todayTotal: todayTotal ?? this.todayTotal,
       weekTotal: weekTotal ?? this.weekTotal,
       topApps: topApps ?? this.topApps,
+      weekTopApps: weekTopApps ?? this.weekTopApps,
       hasPermission: hasPermission ?? this.hasPermission,
       nightUsageMinutes: nightUsageMinutes ?? this.nightUsageMinutes,
+      weekNightUsageMinutes:
+          weekNightUsageMinutes ?? this.weekNightUsageMinutes,
     );
   }
 }
