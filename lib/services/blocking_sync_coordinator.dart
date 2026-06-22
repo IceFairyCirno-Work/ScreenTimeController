@@ -24,18 +24,24 @@ Set<String> computeBlockedPackages(
   final blocked = <String>{...neverAllowedPackages};
   final moment = at ?? DateTime.now();
 
+  if (timer.isRunning) {
+    for (final app in timer.blockedApps) {
+      final pkg = app.packageName;
+      if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
+      if (alwaysAllowedPackages.contains(pkg) &&
+          !neverAllowedPackages.contains(pkg)) {
+        continue;
+      }
+      blocked.add(pkg);
+    }
+  }
+
   final candidatePackages = <String>{};
   for (final rule in rules.rules) {
     for (final app in rule.apps) {
       final pkg = app.packageName;
       if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
       candidatePackages.add(pkg);
-    }
-  }
-
-  if (timer.isRunning) {
-    for (final app in timer.blockedApps) {
-      candidatePackages.add(app.packageName);
     }
   }
 
@@ -55,12 +61,34 @@ Set<String> computeBlockedPackages(
         !neverAllowedPackages.contains(pkg),
   );
   blocked.addAll(neverAllowedPackages);
+
+  if (timer.isRunning) {
+    for (final app in timer.blockedApps) {
+      final pkg = app.packageName;
+      if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
+      if (alwaysAllowedPackages.contains(pkg) &&
+          !neverAllowedPackages.contains(pkg)) {
+        continue;
+      }
+      blocked.add(pkg);
+    }
+  }
+
   return blocked;
+}
+
+Set<String> _timerBlockedPackages(TimerProvider timer) {
+  if (!timer.isRunning) return const {};
+  return timer.blockedApps
+      .map((app) => app.packageName)
+      .where((pkg) => !WebsiteHelpers.isWebsitePackage(pkg))
+      .toSet();
 }
 
 /// Domains that should be blocked in supported browsers.
 Set<String> computeBlockedDomains(
-  RulesProvider rules, {
+  RulesProvider rules,
+  TimerProvider timer, {
   DateTime? at,
   bool emergencyPassActive = false,
 }) {
@@ -68,6 +96,15 @@ Set<String> computeBlockedDomains(
 
   final moment = at ?? DateTime.now();
   final blocked = <String>{};
+
+  if (timer.isRunning) {
+    for (final app in timer.blockedApps) {
+      final pkg = app.packageName;
+      if (WebsiteHelpers.isWebsitePackage(pkg)) {
+        blocked.add(WebsiteHelpers.domainFromPackage(pkg));
+      }
+    }
+  }
 
   for (final display in rules.blockedWebsitesDisplay(moment)) {
     final pkg = display.app.packageName;
@@ -81,17 +118,26 @@ Set<String> computeBlockedDomains(
 
 /// Active per-domain unblock end times for native browser enforcement.
 Map<String, int> computeTemporaryUnblockUntilByDomain(
-  RulesProvider rules, [
+  RulesProvider rules,
+  TimerProvider timer, [
   DateTime? at,
 ]) {
   final moment = at ?? DateTime.now();
   final result = <String, int>{};
+  final timerBlockedDomains = timer.isRunning
+      ? timer.blockedApps
+          .map((app) => app.packageName)
+          .where(WebsiteHelpers.isWebsitePackage)
+          .map(WebsiteHelpers.domainFromPackage)
+          .toSet()
+      : const <String>{};
 
   for (final display in rules.blockedWebsitesDisplay(moment)) {
+    final domain = WebsiteHelpers.domainFromPackage(display.app.packageName);
+    if (timerBlockedDomains.contains(domain)) continue;
     final until = display.unblockedUntil;
     if (until != null && until.isAfter(moment)) {
-      result[WebsiteHelpers.domainFromPackage(display.app.packageName)] =
-          until.millisecondsSinceEpoch;
+      result[domain] = until.millisecondsSinceEpoch;
     }
   }
 
@@ -100,16 +146,22 @@ Map<String, int> computeTemporaryUnblockUntilByDomain(
 
 /// Active per-package unblock end times for native enforcement when a window
 /// expires while the user remains in the app.
+///
+/// Timer-blocked packages are omitted while a focus timer is running so rule
+/// unblocks cannot suppress timer enforcement on the native side.
 Map<String, int> computeTemporaryUnblockUntilByPackage(
-  RulesProvider rules, [
+  RulesProvider rules,
+  TimerProvider timer, [
   DateTime? at,
 ]) {
   final moment = at ?? DateTime.now();
   final result = <String, int>{};
+  final timerBlocked = _timerBlockedPackages(timer);
 
   for (final display in rules.blockedAppsDisplay(moment)) {
     final pkg = display.app.packageName;
     if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
+    if (timerBlocked.contains(pkg)) continue;
     final until = display.unblockedUntil;
     if (until != null && until.isAfter(moment)) {
       result[pkg] = until.millisecondsSinceEpoch;

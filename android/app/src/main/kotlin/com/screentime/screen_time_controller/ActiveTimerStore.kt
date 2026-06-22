@@ -1,6 +1,7 @@
 package com.screentime.screen_time_controller
 
 import android.content.Context
+import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -81,5 +82,48 @@ object ActiveTimerStore {
             "startedAtMs" to startedAtMs,
             "blockedAppsJson" to (prefs.getString(KEY_BLOCKED_APPS_JSON, "[]") ?: "[]"),
         )
+    }
+
+    fun isTimerActive(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val ctx = appContext.get() ?: return false
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_IS_RUNNING, false)) return false
+        if (prefs.getBoolean(KEY_IS_INFINITE, false)) return true
+
+        if (!prefs.contains(KEY_END_TIME_MS)) return false
+        return nowMs < prefs.getLong(KEY_END_TIME_MS, 0L)
+    }
+
+    fun blockedPackages(): Set<String> {
+        val ctx = appContext.get() ?: return emptySet()
+        val raw = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_BLOCKED_APPS_JSON, "[]")
+            ?: "[]"
+        return parseBlockedPackages(raw)
+    }
+
+    fun isTimerBlockedPackage(
+        packageName: String,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Boolean {
+        if (!isTimerActive(nowMs)) return false
+        return blockedPackages().contains(packageName)
+    }
+
+    private fun parseBlockedPackages(raw: String): Set<String> {
+        return try {
+            val array = JSONArray(raw)
+            val packages = LinkedHashSet<String>(array.length())
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val packageName = item.optString("packageName", "")
+                if (packageName.isNotEmpty() && !packageName.startsWith("web:")) {
+                    packages.add(packageName)
+                }
+            }
+            packages
+        } catch (_: Exception) {
+            emptySet()
+        }
     }
 }

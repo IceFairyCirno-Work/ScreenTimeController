@@ -18,6 +18,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
             checkForegroundAndEnforce()
             val delay =
                 if (BlockedPackagesStore.hasBlockedPackages() ||
+                    ActiveTimerEnforcer.hasActiveTimer() ||
                     BlockedDomainsStore.hasBlockedDomains() ||
                     AdultContentBlockStore.isEnabled() ||
                     TemporaryUnblocksStore.hasTrackedPackages() ||
@@ -44,6 +45,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
         TemporaryDomainUnblocksStore.init(applicationContext)
         TimeLimitRulesStore.init(applicationContext)
         SessionScheduleRulesStore.init(applicationContext)
+        ActiveTimerStore.init(applicationContext)
         DistractingPackagesStore.init(applicationContext)
         DistractingOverlaySettingsStore.init(applicationContext)
         BlockedPackagesStore.onPackagesUpdated = {
@@ -148,6 +150,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
 
     private fun shouldEnforce(packageName: String): Boolean {
         if (BlockedPackagesStore.isBlocked(packageName)) return true
+        if (ActiveTimerEnforcer.shouldEnforce(packageName)) return true
         if (SessionScheduleEnforcer.shouldEnforce(packageName)) return true
         if (TemporaryUnblocksStore.shouldEnforceAfterUnblockExpiry(packageName)) return true
         return TimeLimitEnforcer.shouldEnforce(this, packageName)

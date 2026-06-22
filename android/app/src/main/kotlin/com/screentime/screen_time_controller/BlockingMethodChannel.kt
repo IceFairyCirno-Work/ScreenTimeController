@@ -149,6 +149,7 @@ object BlockingMethodChannel {
                         startedAtMs = startedAtMs,
                         blockedAppsJson = blockedAppsJson,
                     )
+                    BlockedPackagesStore.notifyStateUpdated()
                     result.success(null)
                 }
                 "getActiveTimer" -> {

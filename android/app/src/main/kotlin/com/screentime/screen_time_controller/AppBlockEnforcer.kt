@@ -14,6 +14,7 @@ object AppBlockEnforcer {
     fun enforce(context: Context, packageName: String) {
         if (packageName == context.packageName) return
         if (!BlockedPackagesStore.isBlocked(packageName) &&
+            !ActiveTimerEnforcer.shouldEnforce(packageName) &&
             !SessionScheduleEnforcer.shouldEnforce(packageName) &&
             !TemporaryUnblocksStore.shouldEnforceAfterUnblockExpiry(packageName) &&
             !TimeLimitEnforcer.shouldEnforce(context, packageName)

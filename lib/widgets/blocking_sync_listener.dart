@@ -39,6 +39,7 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener>
   bool? _lastAdultWebsitesBlocked;
   bool? _lastDistractingOverlayEnabled;
   String? _lastScheduleStateKey;
+  String? _lastTimerStateKey;
   Timer? _pollTimer;
 
   RulesProvider? _rules;
@@ -126,12 +127,15 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener>
       neverAllowedPackages: neverAllowed,
       emergencyPassActive: emergencyActive,
     );
-    final temporaryUnblocks = computeTemporaryUnblockUntilByPackage(rules);
+    final temporaryUnblocks =
+        computeTemporaryUnblockUntilByPackage(rules, timer);
     final domains = computeBlockedDomains(
       rules,
+      timer,
       emergencyPassActive: emergencyActive,
     );
-    final temporaryDomainUnblocks = computeTemporaryUnblockUntilByDomain(rules);
+    final temporaryDomainUnblocks =
+        computeTemporaryUnblockUntilByDomain(rules, timer);
     final timeLimitRules = computeTimeLimitRulesForNative(
       rules,
       emergencyPassActive: emergencyActive,
@@ -154,6 +158,14 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener>
     final scheduleChanged = scheduleStateKey != _lastScheduleStateKey;
     if (scheduleChanged) {
       _lastScheduleStateKey = scheduleStateKey;
+      force = true;
+    }
+
+    final timerStateKey =
+        '${timer.isRunning}:${timer.blockedApps.map((a) => a.packageName).join('|')}';
+    final timerChanged = timerStateKey != _lastTimerStateKey;
+    if (timerChanged) {
+      _lastTimerStateKey = timerStateKey;
       force = true;
     }
 
@@ -239,12 +251,14 @@ void syncBlockingPackages(BuildContext context) {
     neverAllowedPackages: neverAllowed,
     emergencyPassActive: emergencyActive,
   );
-  final temporaryUnblocks = computeTemporaryUnblockUntilByPackage(rules);
+  final temporaryUnblocks = computeTemporaryUnblockUntilByPackage(rules, timer);
   final domains = computeBlockedDomains(
     rules,
+    timer,
     emergencyPassActive: emergencyActive,
   );
-  final temporaryDomainUnblocks = computeTemporaryUnblockUntilByDomain(rules);
+  final temporaryDomainUnblocks =
+      computeTemporaryUnblockUntilByDomain(rules, timer);
   final timeLimitRules = computeTimeLimitRulesForNative(
     rules,
     emergencyPassActive: emergencyActive,
