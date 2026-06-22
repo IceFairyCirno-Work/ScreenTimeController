@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_rule.dart';
@@ -10,7 +11,7 @@ import '../services/rule_notification_service.dart';
 import '../utils/website_helpers.dart';
 import '../widgets/my_apps/rule_edit_sheet.dart';
 
-class RulesProvider extends ChangeNotifier {
+class RulesProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _storageKey = 'app_rules';
   static const _reEnableCheckInterval = Duration(seconds: 1);
   static const _usageRefreshInterval = Duration(seconds: 1);
@@ -30,6 +31,13 @@ class RulesProvider extends ChangeNotifier {
   /// Periodic timer that clears expired temporal flags and per-package unblock
   /// windows.
   Timer? _reEnableTimer;
+
+  /// Fingerprint of time-sensitive rule status labels; used to avoid redundant
+  /// [notifyListeners] calls while still refreshing countdown badges.
+  String? _lastScheduleDisplayKey;
+
+  /// Shared schedule fingerprint for UI badges and native blocking sync.
+  String scheduleStateKey([DateTime? at]) => _scheduleDisplayKey(at ?? DateTime.now());
 
   List<AppRule> get rules => _rules;
   bool get isLoading => _isLoading;
@@ -219,16 +227,104 @@ class RulesProvider extends ChangeNotifier {
       }).toList();
 
   RulesProvider() {
+    WidgetsBinding.instance.addObserver(this);
     _startReEnableTimer();
     Future.microtask(loadRules);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _lastScheduleDisplayKey = null;
+      _cleanupExpiredDisables();
+      _maybeNotifyScheduleDisplay();
+    }
   }
 
   void _startReEnableTimer() {
     _reEnableTimer?.cancel();
     _reEnableTimer = Timer.periodic(_reEnableCheckInterval, (_) {
       _cleanupExpiredDisables();
+      _maybeNotifyScheduleDisplay();
       _maybeRefreshTimeLimitUsage();
     });
+  }
+
+  /// Notifies listeners when any rule's schedule badge would change (e.g.
+  /// "Starts in 4m" → active, or "45m left" countdown).
+  void _maybeNotifyScheduleDisplay() {
+    if (_rules.isEmpty) return;
+
+    final now = DateTime.now();
+    final key = _scheduleDisplayKey(now);
+    if (key == _lastScheduleDisplayKey) return;
+    _lastScheduleDisplayKey = key;
+    notifyListeners();
+  }
+
+  String _scheduleDisplayKey(DateTime now) {
+    final parts = <String>[];
+    for (final rule in _rules) {
+      if (rule is SessionRule) {
+        if (rule.isCurrentlyDisabled(now)) {
+          final until = rule.disabledUntil;
+          parts.add(
+            '${rule.id}:dis:${until?.difference(now).inMinutes ?? 0}',
+          );
+        } else if (!rule.isEnabled) {
+          parts.add('${rule.id}:paused');
+        } else if (rule.isScheduleActive(now)) {
+          parts.add(
+            '${rule.id}:on:${now.hour}:${now.minute}',
+          );
+        } else {
+          parts.add(
+            '${rule.id}:off:${_untilScheduleStartKey(rule, now)}',
+          );
+        }
+      } else if (rule is OpenLimitRule) {
+        if (rule.isCurrentlyDisabled(now)) {
+          final until = rule.disabledUntil;
+          parts.add(
+            '${rule.id}:dis:${until?.difference(now).inMinutes ?? 0}',
+          );
+        } else if (!rule.isEnabled) {
+          parts.add('${rule.id}:paused');
+        } else if (rule.isRuleActive(now)) {
+          parts.add('${rule.id}:on:${rule.unblocksRemaining}');
+        } else {
+          parts.add(
+            '${rule.id}:off:${_untilActiveDayKey(rule.nextActiveAfter(now), now)}',
+          );
+        }
+      } else if (rule is TimeLimitRule) {
+        if (rule.isCurrentlyDisabled(now)) {
+          final until = rule.disabledUntil;
+          parts.add(
+            '${rule.id}:dis:${until?.difference(now).inMinutes ?? 0}',
+          );
+        } else if (!rule.isEnabled) {
+          parts.add('${rule.id}:paused');
+        } else {
+          parts.add(
+            '${rule.id}:${rule.isRuleActive(now)}',
+          );
+        }
+      }
+    }
+    return parts.join('|');
+  }
+
+  String _untilScheduleStartKey(SessionRule rule, DateTime now) {
+    final until = rule.nextStartAfter(now).difference(now);
+    if (until.inMinutes < 2) return '${until.inSeconds}s';
+    return '${until.inMinutes}m';
+  }
+
+  String _untilActiveDayKey(DateTime nextActive, DateTime now) {
+    final until = nextActive.difference(now);
+    if (until.inMinutes < 2) return '${until.inSeconds}s';
+    return '${until.inMinutes}m';
   }
 
   void _maybeRefreshTimeLimitUsage() {
@@ -862,13 +958,14 @@ class RulesProvider extends ChangeNotifier {
   }
 
   /// Rules inside their schedule window (includes temporary unblocks).
-  List<SessionRule> get scheduleActiveRules {
-    final now = DateTime.now();
-    return _rules
-        .whereType<SessionRule>()
-        .where((r) => r.isScheduleActive(now))
-        .toList();
-  }
+  List<SessionRule> sessionRulesActiveAt(DateTime moment) => _rules
+      .whereType<SessionRule>()
+      .where((r) => r.isScheduleActive(moment))
+      .toList();
+
+  /// Rules inside their schedule window (includes temporary unblocks).
+  List<SessionRule> get scheduleActiveRules =>
+      sessionRulesActiveAt(DateTime.now());
 
   /// Rules that are currently blocking at least one app.
   List<SessionRule> get currentlyActiveRules {
@@ -971,7 +1068,7 @@ class RulesProvider extends ChangeNotifier {
   /// any running unblock window.
   bool _isBlockedByActiveRule(String packageName, [DateTime? at]) {
     final moment = at ?? DateTime.now();
-    if (scheduleActiveRules.any(
+    if (sessionRulesActiveAt(moment).any(
       (r) =>
           r.apps.any((a) => a.packageName == packageName) &&
           r.isPackageBlocked(packageName, moment),
@@ -1457,6 +1554,7 @@ class RulesProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _reEnableTimer?.cancel();
     super.dispose();
   }

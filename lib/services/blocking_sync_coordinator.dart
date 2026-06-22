@@ -24,26 +24,28 @@ Set<String> computeBlockedPackages(
   final blocked = <String>{...neverAllowedPackages};
   final moment = at ?? DateTime.now();
 
-  for (final display in rules.blockedAppsDisplay(moment)) {
-    final pkg = display.app.packageName;
-    if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
+  final candidatePackages = <String>{};
+  for (final rule in rules.rules) {
+    for (final app in rule.apps) {
+      final pkg = app.packageName;
+      if (WebsiteHelpers.isWebsitePackage(pkg)) continue;
+      candidatePackages.add(pkg);
+    }
+  }
+
+  if (timer.isRunning) {
+    for (final app in timer.blockedApps) {
+      candidatePackages.add(app.packageName);
+    }
+  }
+
+  for (final pkg in candidatePackages) {
     if (alwaysAllowedPackages.contains(pkg) &&
         !neverAllowedPackages.contains(pkg)) {
       continue;
     }
     if (rules.isAppBlocked(pkg, moment)) {
       blocked.add(pkg);
-    }
-  }
-
-  if (timer.isRunning) {
-    for (final app in timer.blockedApps) {
-      final pkg = app.packageName;
-      final alwaysOnly = alwaysAllowedPackages.contains(pkg) &&
-          !neverAllowedPackages.contains(pkg);
-      if (!alwaysOnly && !neverAllowedPackages.contains(pkg)) {
-        blocked.add(pkg);
-      }
     }
   }
 
@@ -145,6 +147,39 @@ List<Map<String, dynamic>> computeTimeLimitRulesForNative(
         'blockUntilMidnight': rule.blockUntil.inHours >= 24,
         'limitExceededAtMs': exceeded?.millisecondsSinceEpoch ?? 0,
         'ruleActive': rule.isRuleActive(moment),
+      });
+    }
+  }
+
+  return result;
+}
+
+/// Schedule (session) rules for native [SessionScheduleEnforcer] — evaluated on
+/// device so blocking starts on time even when Flutter is backgrounded.
+List<Map<String, dynamic>> computeSessionScheduleRulesForNative(
+  RulesProvider rules, {
+  bool emergencyPassActive = false,
+}) {
+  if (emergencyPassActive) return const [];
+
+  final result = <Map<String, dynamic>>[];
+
+  for (final rule in rules.sessions) {
+    if (!rule.isEnabled) continue;
+    final disabledUntilMs = rule.disabledUntil?.millisecondsSinceEpoch ?? 0;
+    for (final app in rule.apps) {
+      final pkg = app.packageName;
+      if (rules.isNeverAllowedPackage(pkg)) continue;
+      if (rules.isEffectivelyAlwaysAllowed(pkg)) continue;
+
+      result.add({
+        'packageName': pkg,
+        'startHour': rule.startTime.hour,
+        'startMinute': rule.startTime.minute,
+        'endHour': rule.endTime.hour,
+        'endMinute': rule.endTime.minute,
+        'repeatDays': rule.repeatDays.map((d) => d.index).toList(),
+        'disabledUntilMs': disabledUntilMs,
       });
     }
   }

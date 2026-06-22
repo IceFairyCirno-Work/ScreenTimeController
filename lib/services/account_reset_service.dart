@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_data.dart';
+import '../providers/autofocus_settings_provider.dart';
 import '../providers/emergency_pass_provider.dart';
 import '../providers/folder_apps_provider.dart';
 import '../providers/gem_achievement_provider.dart';
@@ -45,6 +46,7 @@ class AccountResetService {
     context.read<FolderAppsProvider>().resetAfterAccountDeletion();
     context.read<TimerProvider>().resetAfterAccountDeletion();
     context.read<EmergencyPassProvider>().resetAfterAccountDeletion();
+    context.read<AutofocusSettingsProvider>().resetAfterAccountDeletion();
     context.read<GemAchievementProvider>().resetAfterAccountDeletion();
     unawaited(context.read<FolderAppsProvider>().trySeedDefaultFolders());
 

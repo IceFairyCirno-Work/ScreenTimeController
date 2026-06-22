@@ -128,6 +128,7 @@ object BlockOverlayCoordinator {
 
     fun shouldDeferWebsiteEnforce(browserPackage: String, context: Context): Boolean {
         if (BlockedPackagesStore.isBlocked(browserPackage)) return true
+        if (SessionScheduleEnforcer.shouldEnforce(browserPackage)) return true
         if (TemporaryUnblocksStore.shouldEnforceAfterUnblockExpiry(browserPackage)) {
             return true
         }

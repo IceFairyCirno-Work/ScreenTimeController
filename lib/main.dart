@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'models/gem_achievement.dart';
 import 'models/gem_unlock_info.dart';
 import 'models/user_data.dart';
+import 'providers/autofocus_settings_provider.dart';
 import 'providers/emergency_pass_provider.dart';
 import 'providers/folder_apps_provider.dart';
 import 'providers/gem_achievement_provider.dart';
@@ -36,6 +37,7 @@ Future<void> main() async {
       GoogleFonts.inter(fontWeight: FontWeight.w500),
       GoogleFonts.inter(fontWeight: FontWeight.w600),
       GoogleFonts.inter(fontWeight: FontWeight.w700),
+      GoogleFonts.inter(fontWeight: FontWeight.w800),
       GoogleFonts.orbitron(fontWeight: FontWeight.w700),
     ]);
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -64,6 +66,7 @@ class ScreenTimeControllerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PermissionsProvider()),
         ChangeNotifierProvider(create: (_) => RulesProvider()),
         ChangeNotifierProvider(create: (_) => EmergencyPassProvider()),
+        ChangeNotifierProvider(create: (_) => AutofocusSettingsProvider()),
         ChangeNotifierProvider(create: (_) => FolderAppsProvider()),
         ChangeNotifierProvider(create: (_) => GemAchievementProvider()),
         ChangeNotifierProvider(create: (_) => TimerProvider()),
@@ -133,6 +136,7 @@ class _AppEntryState extends State<_AppEntry> with WidgetsBindingObserver {
     context.read<TimerProvider>().ensureInitializedForStartup();
     context.read<GemAchievementProvider>().ensureInitializedForStartup();
     context.read<EmergencyPassProvider>().ensureInitializedForStartup();
+    context.read<AutofocusSettingsProvider>().ensureInitializedForStartup();
   }
 
   @override
@@ -178,6 +182,7 @@ class _AppEntryState extends State<_AppEntry> with WidgetsBindingObserver {
     final timer = context.read<TimerProvider>();
     final gems = context.read<GemAchievementProvider>();
     final emergencyPass = context.read<EmergencyPassProvider>();
+    final autofocusSettings = context.read<AutofocusSettingsProvider>();
 
     // Prefs-backed state can load in parallel; each provider enforces its own
     // timeout and always marks itself initialized in `finally`.
@@ -187,6 +192,7 @@ class _AppEntryState extends State<_AppEntry> with WidgetsBindingObserver {
       timer.load(),
       gems.load(),
       emergencyPass.load(),
+      autofocusSettings.load(),
     ]);
 
     if (!mounted) return;

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/autofocus_settings_provider.dart';
 import '../providers/emergency_pass_provider.dart';
 import '../providers/folder_apps_provider.dart';
 import '../providers/permissions_provider.dart';
@@ -23,7 +24,8 @@ class BlockingSyncListener extends StatefulWidget {
   State<BlockingSyncListener> createState() => _BlockingSyncListenerState();
 }
 
-class _BlockingSyncListenerState extends State<BlockingSyncListener> {
+class _BlockingSyncListenerState extends State<BlockingSyncListener>
+    with WidgetsBindingObserver {
   static const _pollInterval = Duration(seconds: 1);
 
   final AppBlockingService _blockingService = AppBlockingService();
@@ -33,7 +35,10 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
   Set<String>? _lastSyncedDomains;
   Map<String, int>? _lastSyncedDomainUnblocks;
   String? _lastSyncedTimeLimitRulesJson;
+  String? _lastSyncedSessionRulesJson;
   bool? _lastAdultWebsitesBlocked;
+  bool? _lastDistractingOverlayEnabled;
+  String? _lastScheduleStateKey;
   Timer? _pollTimer;
 
   RulesProvider? _rules;
@@ -42,12 +47,22 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
   FolderAppsProvider? _folderApps;
 
   EmergencyPassProvider? _emergencyPass;
+  AutofocusSettingsProvider? _autofocusSettings;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _attachListeners());
     _pollTimer = Timer.periodic(_pollInterval, (_) => _scheduleSync());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _lastScheduleStateKey = null;
+      _scheduleSync(force: true);
+    }
   }
 
   void _attachListeners() {
@@ -58,6 +73,8 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
     _permissions = context.read<PermissionsProvider>()..addListener(_scheduleSync);
     _folderApps = context.read<FolderAppsProvider>()..addListener(_onFolderAppsChanged);
     _emergencyPass = context.read<EmergencyPassProvider>()..addListener(_scheduleSync);
+    _autofocusSettings = context.read<AutofocusSettingsProvider>()
+      ..addListener(_scheduleSync);
 
     _onFolderAppsChanged();
     _scheduleSync();
@@ -72,11 +89,13 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
     _scheduleSync();
   }
 
-  void _scheduleSync() {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncIfNeeded());
+  void _scheduleSync({bool force = false}) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _syncIfNeeded(force: force),
+    );
   }
 
-  void _syncIfNeeded() {
+  void _syncIfNeeded({bool force = false}) {
     if (!mounted) return;
 
     final permissions = context.read<PermissionsProvider>();
@@ -84,12 +103,14 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
     final timer = context.read<TimerProvider>();
     final folderApps = context.read<FolderAppsProvider>();
     final emergencyPass = context.read<EmergencyPassProvider>();
+    final autofocusSettings = context.read<AutofocusSettingsProvider>();
     final emergencyActive = emergencyPass.isActive;
 
     if (!permissions.initialized ||
         rules.isLoading ||
         folderApps.isLoading ||
-        !emergencyPass.initialized) {
+        !emergencyPass.initialized ||
+        !autofocusSettings.initialized) {
       return;
     }
 
@@ -116,20 +137,36 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
       emergencyPassActive: emergencyActive,
     );
     final timeLimitRulesJson = jsonEncode(timeLimitRules);
+    final sessionScheduleRules = computeSessionScheduleRulesForNative(
+      rules,
+      emergencyPassActive: emergencyActive,
+    );
+    final sessionScheduleRulesJson = jsonEncode(sessionScheduleRules);
     final adultWebsitesBlocked =
         emergencyActive ? false : folderApps.adultWebsitesBlocked;
+    final distractingOverlayEnabled = autofocusSettings.overlayEnabled;
     final distractingPackages = computeDistractingPackagesForNative(
       folderApps,
       emergencyPassActive: emergencyActive,
     );
 
-    if (setEquals(_lastSynced, packages) &&
+    final scheduleStateKey = rules.scheduleStateKey();
+    final scheduleChanged = scheduleStateKey != _lastScheduleStateKey;
+    if (scheduleChanged) {
+      _lastScheduleStateKey = scheduleStateKey;
+      force = true;
+    }
+
+    if (!force &&
+        setEquals(_lastSynced, packages) &&
         setEquals(_lastSyncedDistracting, distractingPackages) &&
         mapEquals(_lastSyncedUnblocks, temporaryUnblocks) &&
         setEquals(_lastSyncedDomains, domains) &&
         mapEquals(_lastSyncedDomainUnblocks, temporaryDomainUnblocks) &&
         _lastSyncedTimeLimitRulesJson == timeLimitRulesJson &&
-        _lastAdultWebsitesBlocked == adultWebsitesBlocked) {
+        _lastSyncedSessionRulesJson == sessionScheduleRulesJson &&
+        _lastAdultWebsitesBlocked == adultWebsitesBlocked &&
+        _lastDistractingOverlayEnabled == distractingOverlayEnabled) {
       return;
     }
 
@@ -139,26 +176,32 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener> {
     _lastSyncedDomains = Set<String>.from(domains);
     _lastSyncedDomainUnblocks = Map<String, int>.from(temporaryDomainUnblocks);
     _lastSyncedTimeLimitRulesJson = timeLimitRulesJson;
+    _lastSyncedSessionRulesJson = sessionScheduleRulesJson;
     _lastAdultWebsitesBlocked = adultWebsitesBlocked;
+    _lastDistractingOverlayEnabled = distractingOverlayEnabled;
     _blockingService.syncBlockedPackages(
       packages,
       temporaryUnblockUntilByPackage: temporaryUnblocks,
       domains: domains,
       temporaryUnblockUntilByDomain: temporaryDomainUnblocks,
       timeLimitRules: timeLimitRules,
+      sessionScheduleRules: sessionScheduleRules,
       adultWebsitesBlocked: adultWebsitesBlocked,
       distractingPackages: distractingPackages,
+      distractingOverlayEnabled: distractingOverlayEnabled,
     );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _rules?.removeListener(_scheduleSync);
     _timer?.removeListener(_scheduleSync);
     _permissions?.removeListener(_scheduleSync);
     _folderApps?.removeListener(_onFolderAppsChanged);
     _emergencyPass?.removeListener(_scheduleSync);
+    _autofocusSettings?.removeListener(_scheduleSync);
     super.dispose();
   }
 
@@ -173,12 +216,14 @@ void syncBlockingPackages(BuildContext context) {
   final timer = context.read<TimerProvider>();
   final folderApps = context.read<FolderAppsProvider>();
   final emergencyPass = context.read<EmergencyPassProvider>();
+  final autofocusSettings = context.read<AutofocusSettingsProvider>();
   final emergencyActive = emergencyPass.isActive;
 
   if (!permissions.initialized ||
       rules.isLoading ||
       folderApps.isLoading ||
-      !emergencyPass.initialized) {
+      !emergencyPass.initialized ||
+      !autofocusSettings.initialized) {
     return;
   }
 
@@ -204,6 +249,10 @@ void syncBlockingPackages(BuildContext context) {
     rules,
     emergencyPassActive: emergencyActive,
   );
+  final sessionScheduleRules = computeSessionScheduleRulesForNative(
+    rules,
+    emergencyPassActive: emergencyActive,
+  );
   final distractingPackages = computeDistractingPackagesForNative(
     folderApps,
     emergencyPassActive: emergencyActive,
@@ -214,8 +263,10 @@ void syncBlockingPackages(BuildContext context) {
     domains: domains,
     temporaryUnblockUntilByDomain: temporaryDomainUnblocks,
     timeLimitRules: timeLimitRules,
+    sessionScheduleRules: sessionScheduleRules,
     adultWebsitesBlocked:
         emergencyActive ? false : folderApps.adultWebsitesBlocked,
     distractingPackages: distractingPackages,
+    distractingOverlayEnabled: autofocusSettings.overlayEnabled,
   );
 }

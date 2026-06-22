@@ -15,8 +15,10 @@ class AppBlockingService {
     Set<String> domains = const {},
     Map<String, int> temporaryUnblockUntilByDomain = const {},
     List<Map<String, dynamic>> timeLimitRules = const [],
+    List<Map<String, dynamic>> sessionScheduleRules = const [],
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
+    bool distractingOverlayEnabled = true,
   }) =>
       _platform.syncBlockedPackages(
         packages,
@@ -24,8 +26,10 @@ class AppBlockingService {
         domains: domains,
         temporaryUnblockUntilByDomain: temporaryUnblockUntilByDomain,
         timeLimitRules: timeLimitRules,
+        sessionScheduleRules: sessionScheduleRules,
         adultWebsitesBlocked: adultWebsitesBlocked,
         distractingPackages: distractingPackages,
+        distractingOverlayEnabled: distractingOverlayEnabled,
       );
 
   Future<void> clearBlockedPackages() => _platform.clearBlockedPackages();

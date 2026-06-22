@@ -38,6 +38,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _recoverInterruptedOnboarding();
+    });
+  }
+
+  /// If the user finished the questionnaire but the app restarted while they
+  /// were granting permissions in system settings, route them to the
+  /// post-onboarding permission gate instead of page 0.
+  Future<void> _recoverInterruptedOnboarding() async {
+    final userData = context.read<UserData>();
+    if (userData.isOnboardingComplete) return;
+    if (userData.dailyScreenTime == null ||
+        userData.habitToChange == null ||
+        userData.ageRange == null ||
+        userData.occupation == null) {
+      return;
+    }
+    await userData.markOnboardingComplete();
   }
 
   @override
@@ -78,6 +96,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _nextPage() {
+    if (_currentPage == _goodNewsPage) {
+      context.read<UserData>().markOnboardingComplete();
+      return;
+    }
     if (_currentPage < _permissionPage) {
       _goToPage(_currentPage + 1);
     }
@@ -179,19 +201,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (page) => setState(() {
-                  _currentPage = page;
-                  if (page < _questionCount) {
-                    if (page > _highestQuestionReached) {
-                      _highestQuestionReached = page;
-                    }
-                  } else if (page <= _goodNewsPage) {
-                    final step = page - _resultIntroPage;
-                    if (step > _highestResultStepReached) {
-                      _highestResultStepReached = step;
-                    }
+                onPageChanged: (page) {
+                  if (page == _permissionPage) {
+                    context.read<UserData>().markOnboardingComplete();
                   }
-                }),
+                  setState(() {
+                    _currentPage = page;
+                    if (page < _questionCount) {
+                      if (page > _highestQuestionReached) {
+                        _highestQuestionReached = page;
+                      }
+                    } else if (page <= _goodNewsPage) {
+                      final step = page - _resultIntroPage;
+                      if (step > _highestResultStepReached) {
+                        _highestResultStepReached = step;
+                      }
+                    }
+                  });
+                },
                 children: [
                   _QuestionPage(
                     title: 'What is your daily\naverage Screen Time?',

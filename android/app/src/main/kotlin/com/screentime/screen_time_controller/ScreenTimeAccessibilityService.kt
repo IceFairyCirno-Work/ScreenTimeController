@@ -23,6 +23,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
                     TemporaryUnblocksStore.hasTrackedPackages() ||
                     TemporaryDomainUnblocksStore.hasTrackedDomains() ||
                     TimeLimitRulesStore.hasActiveRules() ||
+                    SessionScheduleRulesStore.hasEnabledRules() ||
                     DistractingPackagesStore.hasDistractingPackages()
                 ) {
                     FOREGROUND_POLL_MS
@@ -42,11 +43,16 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
         TemporaryUnblocksStore.init(applicationContext)
         TemporaryDomainUnblocksStore.init(applicationContext)
         TimeLimitRulesStore.init(applicationContext)
+        SessionScheduleRulesStore.init(applicationContext)
         DistractingPackagesStore.init(applicationContext)
+        DistractingOverlaySettingsStore.init(applicationContext)
         BlockedPackagesStore.onPackagesUpdated = {
             handler.post { checkForegroundAndEnforce() }
         }
         DistractingPackagesStore.onPackagesUpdated = {
+            handler.post { checkForegroundAndEnforce() }
+        }
+        SessionScheduleRulesStore.onRulesUpdated = {
             handler.post { checkForegroundAndEnforce() }
         }
         handler.post(foregroundMonitor)
@@ -80,6 +86,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         BlockedPackagesStore.onPackagesUpdated = null
         DistractingPackagesStore.onPackagesUpdated = null
+        SessionScheduleRulesStore.onRulesUpdated = null
         DistractingOverlayManager.hide()
         handler.removeCallbacks(foregroundMonitor)
         super.onDestroy()
@@ -100,6 +107,11 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
     }
 
     private fun updateDistractingOverlay(foregroundPackage: String) {
+        if (!DistractingOverlaySettingsStore.isEnabled()) {
+            DistractingOverlayManager.hide()
+            lastAwarenessForegroundPackage = foregroundPackage
+            return
+        }
         if (!PermissionsHelper.hasOverlayPermission(this)) {
             DistractingOverlayManager.hide()
             lastAwarenessForegroundPackage = foregroundPackage
@@ -136,6 +148,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
 
     private fun shouldEnforce(packageName: String): Boolean {
         if (BlockedPackagesStore.isBlocked(packageName)) return true
+        if (SessionScheduleEnforcer.shouldEnforce(packageName)) return true
         if (TemporaryUnblocksStore.shouldEnforceAfterUnblockExpiry(packageName)) return true
         return TimeLimitEnforcer.shouldEnforce(this, packageName)
     }

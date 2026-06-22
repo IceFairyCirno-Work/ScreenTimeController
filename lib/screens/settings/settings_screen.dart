@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../screens/settings/about_settings_screen.dart';
+import '../../screens/settings/autofocus_settings_screen.dart';
 import '../../screens/settings/emergency_pass_screen.dart';
 import '../../screens/settings/my_account_screen.dart';
 import '../../screens/settings/permissions_settings_screen.dart';
@@ -39,6 +40,12 @@ class SettingsScreen extends StatelessWidget {
   void _openAbout(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AboutSettingsScreen()),
+    );
+  }
+
+  void _openAutofocus(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AutofocusSettingsScreen()),
     );
   }
 
@@ -96,6 +103,19 @@ class SettingsScreen extends StatelessWidget {
                             color: AppTheme.textSecondary,
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const SettingsSectionLabel(title: 'Personalize'),
+                  SettingsSectionCard(
+                    children: [
+                      SettingsRow(
+                        icon: Icons.auto_fix_high_rounded,
+                        title: 'Autofocus',
+                        isLast: true,
+                        trailing: _chevronTrailing,
+                        onTap: () => _openAutofocus(context),
                       ),
                     ],
                   ),

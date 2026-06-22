@@ -11,8 +11,10 @@ abstract class EnforcementPlatform {
     Set<String> domains = const {},
     Map<String, int> temporaryUnblockUntilByDomain = const {},
     List<Map<String, dynamic>> timeLimitRules = const [],
+    List<Map<String, dynamic>> sessionScheduleRules = const [],
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
+    bool distractingOverlayEnabled = true,
   });
 
   Future<void> clearBlockedPackages();
@@ -41,8 +43,10 @@ class AndroidEnforcementPlatform implements EnforcementPlatform {
     Set<String> domains = const {},
     Map<String, int> temporaryUnblockUntilByDomain = const {},
     List<Map<String, dynamic>> timeLimitRules = const [],
+    List<Map<String, dynamic>> sessionScheduleRules = const [],
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
+    bool distractingOverlayEnabled = true,
   }) async {
     try {
       await _channel.invokeMethod<void>(
@@ -53,8 +57,10 @@ class AndroidEnforcementPlatform implements EnforcementPlatform {
           'domains': domains.toList(),
           'temporaryDomainUnblocks': temporaryUnblockUntilByDomain,
           'timeLimitRules': timeLimitRules,
+          'sessionScheduleRules': sessionScheduleRules,
           'adultWebsitesBlocked': adultWebsitesBlocked,
           'distractingPackages': distractingPackages.toList(),
+          'distractingOverlayEnabled': distractingOverlayEnabled,
         },
       );
     } on MissingPluginException catch (e) {
@@ -131,8 +137,10 @@ class IosEnforcementPlatform implements EnforcementPlatform {
     Set<String> domains = const {},
     Map<String, int> temporaryUnblockUntilByDomain = const {},
     List<Map<String, dynamic>> timeLimitRules = const [],
+    List<Map<String, dynamic>> sessionScheduleRules = const [],
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
+    bool distractingOverlayEnabled = true,
   }) async {
     try {
       await _channel.invokeMethod<void>(
@@ -143,8 +151,10 @@ class IosEnforcementPlatform implements EnforcementPlatform {
           'domains': domains.toList(),
           'temporaryDomainUnblocks': temporaryUnblockUntilByDomain,
           'timeLimitRules': timeLimitRules,
+          'sessionScheduleRules': sessionScheduleRules,
           'adultWebsitesBlocked': adultWebsitesBlocked,
           'distractingPackages': distractingPackages.toList(),
+          'distractingOverlayEnabled': distractingOverlayEnabled,
         },
       );
     } on MissingPluginException {
@@ -226,8 +236,10 @@ class NoopEnforcementPlatform implements EnforcementPlatform {
     Set<String> domains = const {},
     Map<String, int> temporaryUnblockUntilByDomain = const {},
     List<Map<String, dynamic>> timeLimitRules = const [],
+    List<Map<String, dynamic>> sessionScheduleRules = const [],
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
+    bool distractingOverlayEnabled = true,
   }) async {}
 
   @override

@@ -12,18 +12,8 @@
         android:id="@+id/imgLogo"
         android:layout_width="22dp"
         android:layout_height="22dp"
-        android:contentDescription="@string/app_name_silo"
+        android:contentDescription="@null"
         android:src="@mipmap/ic_launcher" />
-
-    <TextView
-        android:id="@+id/txtAppName"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:text="@string/app_name_silo"
-        android:textColor="@color/distracting_pill_text"
-        android:textSize="15sp"
-        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/txtTimer"

@@ -337,7 +337,7 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
                             ),
                           ),
                           const SizedBox(height: 28),
-                          _contentInset(const _InsightBlock()),
+                          _wideProgressBars(const _InsightBlock()),
                           const SizedBox(height: 28),
                           _wideProgressBars(
                             _AnalyticalBarsSection(

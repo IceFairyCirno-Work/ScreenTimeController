@@ -14,8 +14,10 @@ object BlockingMethodChannel {
         TemporaryUnblocksStore.init(context)
         TemporaryDomainUnblocksStore.init(context)
         TimeLimitRulesStore.init(context)
+        SessionScheduleRulesStore.init(context)
         ActiveTimerStore.init(context)
         DistractingPackagesStore.init(context)
+        DistractingOverlaySettingsStore.init(context)
         MethodChannel(messenger, CHANNEL_NAME).setMethodCallHandler { call, result ->
             when (call.method) {
                 "syncBlockedPackages" -> {
@@ -74,6 +76,30 @@ object BlockingMethodChannel {
                     }
                     val timeLimitsChanged =
                         TimeLimitRulesStore.setEntries(timeLimitEntries)
+
+                    @Suppress("UNCHECKED_CAST")
+                    val rawSessionRules =
+                        call.argument<List<Map<String, Any>>>("sessionScheduleRules")
+                            ?: emptyList()
+                    val sessionEntries = rawSessionRules.mapNotNull { map ->
+                        val packageName = map["packageName"] as? String ?: return@mapNotNull null
+                        val repeatRaw = map["repeatDays"] as? List<*> ?: return@mapNotNull null
+                        val repeatDays = repeatRaw.mapNotNull { day ->
+                            (day as? Number)?.toInt()
+                        }.toSet()
+                        SessionScheduleRulesStore.Entry(
+                            packageName = packageName,
+                            startHour = (map["startHour"] as? Number)?.toInt() ?: return@mapNotNull null,
+                            startMinute = (map["startMinute"] as? Number)?.toInt() ?: 0,
+                            endHour = (map["endHour"] as? Number)?.toInt() ?: return@mapNotNull null,
+                            endMinute = (map["endMinute"] as? Number)?.toInt() ?: 0,
+                            repeatDays = repeatDays,
+                            disabledUntilMs =
+                                (map["disabledUntilMs"] as? Number)?.toLong() ?: 0L,
+                        )
+                    }
+                    SessionScheduleRulesStore.setEntries(sessionEntries)
+
                     val adultBlockingChanged = AdultContentBlockStore.setEnabled(
                         call.argument<Boolean>("adultWebsitesBlocked") ?: true,
                     )
@@ -84,19 +110,19 @@ object BlockingMethodChannel {
                         DistractingPackagesStore.setDistractingPackages(
                             distractingPackages.toSet(),
                         )
-
-                    if (blockedChanged ||
-                        unblocksChanged ||
-                        domainsChanged ||
-                        domainUnblocksChanged ||
-                        timeLimitsChanged ||
-                        adultBlockingChanged
-                    ) {
-                        BlockedPackagesStore.notifyStateUpdated()
+                    val overlayChanged = DistractingOverlaySettingsStore.setEnabled(
+                        call.argument<Boolean>("distractingOverlayEnabled") ?: true,
+                    )
+                    if (overlayChanged && !DistractingOverlaySettingsStore.isEnabled()) {
+                        DistractingOverlayManager.hide()
                     }
+
                     if (distractingChanged) {
                         DistractingPackagesStore.notifyStateUpdated()
                     }
+                    // Always re-check the foreground app when Flutter pushes a
+                    // sync — schedule boundaries can change enforcement timing.
+                    BlockedPackagesStore.notifyStateUpdated()
                     result.success(null)
                 }
                 "syncDistractingPackages" -> {
