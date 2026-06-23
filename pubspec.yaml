@@ -2,7 +2,7 @@ name: screen_time_controller
 description: "Silo - Monitor and manage your screen usage"
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 0.9.0+1
 
 environment:
   sdk: ^3.12.0

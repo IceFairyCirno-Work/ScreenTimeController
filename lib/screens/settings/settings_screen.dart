@@ -166,6 +166,16 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'v0.9',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
           ],
         ),
       ),

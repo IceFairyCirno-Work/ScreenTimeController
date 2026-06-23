@@ -1,7 +1,7 @@
 import '../models/app_folder.dart';
+import '../models/focus_timer_blocking_state.dart';
 import '../providers/folder_apps_provider.dart';
 import '../providers/rules_provider.dart';
-import '../providers/timer_provider.dart';
 import '../utils/website_helpers.dart';
 
 /// Computes the set of package names that should be blocked on Android.
@@ -13,7 +13,7 @@ import '../utils/website_helpers.dart';
 /// included.
 Set<String> computeBlockedPackages(
   RulesProvider rules,
-  TimerProvider timer, {
+  FocusTimerBlockingState timer, {
   DateTime? at,
   Set<String> alwaysAllowedPackages = const {},
   Set<String> neverAllowedPackages = const {},
@@ -77,7 +77,7 @@ Set<String> computeBlockedPackages(
   return blocked;
 }
 
-Set<String> _timerBlockedPackages(TimerProvider timer) {
+Set<String> _timerBlockedPackages(FocusTimerBlockingState timer) {
   if (!timer.isRunning) return const {};
   return timer.blockedApps
       .map((app) => app.packageName)
@@ -88,7 +88,7 @@ Set<String> _timerBlockedPackages(TimerProvider timer) {
 /// Domains that should be blocked in supported browsers.
 Set<String> computeBlockedDomains(
   RulesProvider rules,
-  TimerProvider timer, {
+  FocusTimerBlockingState timer, {
   DateTime? at,
   bool emergencyPassActive = false,
 }) {
@@ -119,9 +119,12 @@ Set<String> computeBlockedDomains(
 /// Active per-domain unblock end times for native browser enforcement.
 Map<String, int> computeTemporaryUnblockUntilByDomain(
   RulesProvider rules,
-  TimerProvider timer, [
+  FocusTimerBlockingState timer, {
   DateTime? at,
-]) {
+  bool emergencyPassActive = false,
+}) {
+  if (emergencyPassActive) return const {};
+
   final moment = at ?? DateTime.now();
   final result = <String, int>{};
   final timerBlockedDomains = timer.isRunning
@@ -151,9 +154,12 @@ Map<String, int> computeTemporaryUnblockUntilByDomain(
 /// unblocks cannot suppress timer enforcement on the native side.
 Map<String, int> computeTemporaryUnblockUntilByPackage(
   RulesProvider rules,
-  TimerProvider timer, [
+  FocusTimerBlockingState timer, {
   DateTime? at,
-]) {
+  bool emergencyPassActive = false,
+}) {
+  if (emergencyPassActive) return const {};
+
   final moment = at ?? DateTime.now();
   final result = <String, int>{};
   final timerBlocked = _timerBlockedPackages(timer);

@@ -15,6 +15,9 @@ abstract class EnforcementPlatform {
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
     bool distractingOverlayEnabled = true,
+    Set<String> alwaysAllowedPackages = const {},
+    Set<String> neverAllowedPackages = const {},
+    bool emergencyPassActive = false,
   });
 
   Future<void> clearBlockedPackages();
@@ -47,6 +50,9 @@ class AndroidEnforcementPlatform implements EnforcementPlatform {
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
     bool distractingOverlayEnabled = true,
+    Set<String> alwaysAllowedPackages = const {},
+    Set<String> neverAllowedPackages = const {},
+    bool emergencyPassActive = false,
   }) async {
     try {
       await _channel.invokeMethod<void>(
@@ -61,6 +67,9 @@ class AndroidEnforcementPlatform implements EnforcementPlatform {
           'adultWebsitesBlocked': adultWebsitesBlocked,
           'distractingPackages': distractingPackages.toList(),
           'distractingOverlayEnabled': distractingOverlayEnabled,
+          'alwaysAllowedPackages': alwaysAllowedPackages.toList(),
+          'neverAllowedPackages': neverAllowedPackages.toList(),
+          'emergencyPassActive': emergencyPassActive,
         },
       );
     } on MissingPluginException catch (e) {
@@ -141,6 +150,9 @@ class IosEnforcementPlatform implements EnforcementPlatform {
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
     bool distractingOverlayEnabled = true,
+    Set<String> alwaysAllowedPackages = const {},
+    Set<String> neverAllowedPackages = const {},
+    bool emergencyPassActive = false,
   }) async {
     try {
       await _channel.invokeMethod<void>(
@@ -155,6 +167,9 @@ class IosEnforcementPlatform implements EnforcementPlatform {
           'adultWebsitesBlocked': adultWebsitesBlocked,
           'distractingPackages': distractingPackages.toList(),
           'distractingOverlayEnabled': distractingOverlayEnabled,
+          'alwaysAllowedPackages': alwaysAllowedPackages.toList(),
+          'neverAllowedPackages': neverAllowedPackages.toList(),
+          'emergencyPassActive': emergencyPassActive,
         },
       );
     } on MissingPluginException {
@@ -240,6 +255,9 @@ class NoopEnforcementPlatform implements EnforcementPlatform {
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
     bool distractingOverlayEnabled = true,
+    Set<String> alwaysAllowedPackages = const {},
+    Set<String> neverAllowedPackages = const {},
+    bool emergencyPassActive = false,
   }) async {}
 
   @override

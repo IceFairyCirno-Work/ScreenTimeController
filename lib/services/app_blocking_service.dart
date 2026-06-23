@@ -19,6 +19,9 @@ class AppBlockingService {
     bool adultWebsitesBlocked = true,
     Set<String> distractingPackages = const {},
     bool distractingOverlayEnabled = true,
+    Set<String> alwaysAllowedPackages = const {},
+    Set<String> neverAllowedPackages = const {},
+    bool emergencyPassActive = false,
   }) =>
       _platform.syncBlockedPackages(
         packages,
@@ -30,6 +33,9 @@ class AppBlockingService {
         adultWebsitesBlocked: adultWebsitesBlocked,
         distractingPackages: distractingPackages,
         distractingOverlayEnabled: distractingOverlayEnabled,
+        alwaysAllowedPackages: alwaysAllowedPackages,
+        neverAllowedPackages: neverAllowedPackages,
+        emergencyPassActive: emergencyPassActive,
       );
 
   Future<void> clearBlockedPackages() => _platform.clearBlockedPackages();

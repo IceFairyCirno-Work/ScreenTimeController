@@ -8,8 +8,14 @@ object ActiveTimerEnforcer {
     fun shouldEnforce(
         packageName: String,
         nowMs: Long = System.currentTimeMillis(),
-    ): Boolean = ActiveTimerStore.isTimerBlockedPackage(packageName, nowMs)
+    ): Boolean {
+        if (BlockingPolicyStore.isEmergencyPassActive()) return false
+        if (BlockingPolicyStore.isEffectivelyAlwaysAllowed(packageName)) return false
+        return ActiveTimerStore.isTimerBlockedPackage(packageName, nowMs)
+    }
 
-    fun hasActiveTimer(nowMs: Long = System.currentTimeMillis()): Boolean =
-        ActiveTimerStore.isTimerActive(nowMs)
+    fun hasActiveTimer(nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (BlockingPolicyStore.isEmergencyPassActive()) return false
+        return ActiveTimerStore.isTimerActive(nowMs)
+    }
 }

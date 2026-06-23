@@ -13,6 +13,7 @@ object AppBlockEnforcer {
 
     fun enforce(context: Context, packageName: String) {
         if (packageName == context.packageName) return
+        if (BlockingPolicyStore.isEmergencyPassActive()) return
         if (!BlockedPackagesStore.isBlocked(packageName) &&
             !ActiveTimerEnforcer.shouldEnforce(packageName) &&
             !SessionScheduleEnforcer.shouldEnforce(packageName) &&

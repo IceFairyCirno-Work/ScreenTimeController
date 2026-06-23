@@ -38,6 +38,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         BlockedPackagesStore.init(applicationContext)
+        BlockingPolicyStore.init(applicationContext)
         BlockedDomainsStore.init(applicationContext)
         AdultContentBlockStore.init(applicationContext)
         BlockedAppStatsStore.init(applicationContext)
@@ -149,6 +150,7 @@ class ScreenTimeAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldEnforce(packageName: String): Boolean {
+        if (BlockingPolicyStore.isEmergencyPassActive()) return false
         if (BlockedPackagesStore.isBlocked(packageName)) return true
         if (ActiveTimerEnforcer.shouldEnforce(packageName)) return true
         if (SessionScheduleEnforcer.shouldEnforce(packageName)) return true

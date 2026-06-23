@@ -1,14 +1,19 @@
 package com.screentime.screen_time_controller
 
 import android.content.Context
+import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
+
+private const val PENDING_AUTO_MOVE_PREFS = "midnight_auto_move"
+private const val PENDING_AUTO_MOVE_KEY = "pending_auto_moved"
 
 object BlockingMethodChannel {
     const val CHANNEL_NAME = "com.screentime.screen_time_controller/app_blocking"
 
     fun register(messenger: BinaryMessenger, context: Context) {
         BlockedPackagesStore.init(context)
+        BlockingPolicyStore.init(context)
         BlockedDomainsStore.init(context)
         AdultContentBlockStore.init(context)
         TemporaryUnblocksStore.init(context)
@@ -18,6 +23,8 @@ object BlockingMethodChannel {
         ActiveTimerStore.init(context)
         DistractingPackagesStore.init(context)
         DistractingOverlaySettingsStore.init(context)
+        MidnightAutoMoveStore.init(context)
+        MidnightAutoMoveReceiver.scheduleMidnight(context)
         MethodChannel(messenger, CHANNEL_NAME).setMethodCallHandler { call, result ->
             when (call.method) {
                 "syncBlockedPackages" -> {
@@ -106,12 +113,26 @@ object BlockingMethodChannel {
                     val distractingPackages =
                         call.argument<List<String>>("distractingPackages")
                             ?: emptyList()
+                    val pendingAutoMoved = mergePendingAutoMovedPackages(context, distractingPackages)
                     val distractingChanged =
                         DistractingPackagesStore.setDistractingPackages(
-                            distractingPackages.toSet(),
+                            pendingAutoMoved.toSet(),
                         )
                     val overlayChanged = DistractingOverlaySettingsStore.setEnabled(
                         call.argument<Boolean>("distractingOverlayEnabled") ?: true,
+                    )
+                    val alwaysAllowed =
+                        call.argument<List<String>>("alwaysAllowedPackages")
+                            ?: emptyList()
+                    val neverAllowed =
+                        call.argument<List<String>>("neverAllowedPackages")
+                            ?: emptyList()
+                    val emergencyPassActive =
+                        call.argument<Boolean>("emergencyPassActive") ?: false
+                    BlockingPolicyStore.setPolicy(
+                        alwaysAllowed = alwaysAllowed.toSet(),
+                        neverAllowed = neverAllowed.toSet(),
+                        emergencyPassActive = emergencyPassActive,
                     )
                     if (overlayChanged && !DistractingOverlaySettingsStore.isEnabled()) {
                         DistractingOverlayManager.hide()
@@ -178,5 +199,26 @@ object BlockingMethodChannel {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun mergePendingAutoMovedPackages(
+        context: Context,
+        flutterDistracting: List<String>,
+    ): List<String> {
+        val pendingPrefs = context.getSharedPreferences(
+            PENDING_AUTO_MOVE_PREFS,
+            Context.MODE_PRIVATE,
+        )
+        val pending = pendingPrefs.getStringSet(PENDING_AUTO_MOVE_KEY, null) ?: return flutterDistracting
+
+        val merged = (flutterDistracting + pending).distinct()
+        if (merged.size > flutterDistracting.size) {
+            pendingPrefs.edit().remove(PENDING_AUTO_MOVE_KEY).apply()
+            Log.i(
+                "BlockingMethodChannel",
+                "Merged ${pending.size} pending auto-move packages into distracting list",
+            )
+        }
+        return merged
     }
 }
