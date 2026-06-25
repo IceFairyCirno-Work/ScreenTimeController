@@ -3,6 +3,7 @@ import '../models/focus_timer_blocking_state.dart';
 import '../providers/folder_apps_provider.dart';
 import '../providers/rules_provider.dart';
 import '../utils/website_helpers.dart';
+import 'app_blocking_service.dart';
 
 /// Computes the set of package names that should be blocked on Android.
 ///
@@ -265,4 +266,14 @@ Set<String> computeDistractingPackagesForNative(
   }
 
   return packages;
+}
+
+/// Pulls apps queued by the native midnight auto-move job into the
+/// Distracting folder and persists them via Flutter SharedPreferences.
+Future<void> applyPendingAutoMovedFolders(
+  FolderAppsProvider folderApps,
+) async {
+  final pending =
+      await AppBlockingService().consumePendingAutoMovedApps();
+  await folderApps.applyPendingAutoMovedApps(pending);
 }

@@ -64,8 +64,14 @@ class _BlockingSyncListenerState extends State<BlockingSyncListener>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _lastScheduleStateKey = null;
+      unawaited(_applyPendingAutoMovedFolders());
       _scheduleSync(force: true);
     }
+  }
+
+  Future<void> _applyPendingAutoMovedFolders() async {
+    if (!mounted || _folderApps == null) return;
+    await applyPendingAutoMovedFolders(context.read<FolderAppsProvider>());
   }
 
   void _attachListeners() {

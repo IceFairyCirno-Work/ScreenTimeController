@@ -33,6 +33,9 @@ abstract class EnforcementPlatform {
   Future<Map<String, dynamic>?> getActiveTimer();
 
   Future<void> clearActiveTimer();
+
+  /// Apps queued by the midnight auto-move job for Flutter to persist.
+  Future<List<Map<String, String>>> consumePendingAutoMovedApps();
 }
 
 class AndroidEnforcementPlatform implements EnforcementPlatform {
@@ -132,6 +135,32 @@ class AndroidEnforcementPlatform implements EnforcementPlatform {
     } on PlatformException catch (e) {
       debugPrint('Failed to clear active timer: $e');
     }
+  }
+
+  @override
+  Future<List<Map<String, String>>> consumePendingAutoMovedApps() async {
+    try {
+      final result =
+          await _channel.invokeMethod<List<Object?>>('consumePendingAutoMovedApps');
+      if (result == null) return const [];
+
+      return result
+          .whereType<Map>()
+          .map(
+            (entry) => {
+              'packageName': entry['packageName']?.toString() ?? '',
+              'appName': entry['appName']?.toString() ?? '',
+            },
+          )
+          .where((entry) => entry['packageName']!.isNotEmpty)
+          .map((entry) => Map<String, String>.from(entry))
+          .toList();
+    } on MissingPluginException catch (e) {
+      debugPrint('Native blocking channel unavailable: $e');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to consume pending auto-moved apps: $e');
+    }
+    return const [];
   }
 }
 
@@ -241,6 +270,10 @@ class IosEnforcementPlatform implements EnforcementPlatform {
       debugPrint('iOS clear active timer failed: $e');
     }
   }
+
+  @override
+  Future<List<Map<String, String>>> consumePendingAutoMovedApps() async =>
+      const [];
 }
 
 class NoopEnforcementPlatform implements EnforcementPlatform {
@@ -277,6 +310,10 @@ class NoopEnforcementPlatform implements EnforcementPlatform {
 
   @override
   Future<void> clearActiveTimer() async {}
+
+  @override
+  Future<List<Map<String, String>>> consumePendingAutoMovedApps() async =>
+      const [];
 }
 
 EnforcementPlatform createEnforcementPlatform() {

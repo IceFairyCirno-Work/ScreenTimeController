@@ -22,6 +22,7 @@ import 'screens/home/home_shell.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/welcome/welcome_gem_screen.dart';
 import 'services/rule_notification_service.dart';
+import 'services/blocking_sync_coordinator.dart';
 import 'theme/app_theme.dart';
 import 'widgets/blocking_sync_listener.dart';
 import 'widgets/rule_notification_listener.dart';
@@ -30,7 +31,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Preload AppTheme font variants, then disable CDN fetches so later screens
   // don't hit loadFontIfNecessary without a cached glyph. If preload fails
-  // (e.g. offline cold start), keep runtime fetching enabled as fallback.
+  // or times out (e.g. offline cold start), keep runtime fetching enabled.
   try {
     await GoogleFonts.pendingFonts([
       GoogleFonts.inter(fontWeight: FontWeight.w400),
@@ -39,7 +40,7 @@ Future<void> main() async {
       GoogleFonts.inter(fontWeight: FontWeight.w700),
       GoogleFonts.inter(fontWeight: FontWeight.w800),
       GoogleFonts.orbitron(fontWeight: FontWeight.w700),
-    ]);
+    ]).timeout(const Duration(seconds: 10));
     GoogleFonts.config.allowRuntimeFetching = false;
   } catch (_) {
     GoogleFonts.config.allowRuntimeFetching = true;
@@ -194,6 +195,8 @@ class _AppEntryState extends State<_AppEntry> with WidgetsBindingObserver {
       emergencyPass.load(),
       autofocusSettings.load(),
     ]);
+
+    await applyPendingAutoMovedFolders(folderApps);
 
     if (!mounted) return;
 

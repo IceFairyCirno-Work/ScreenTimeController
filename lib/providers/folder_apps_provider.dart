@@ -165,6 +165,38 @@ class FolderAppsProvider extends ChangeNotifier {
     unawaited(_seedDefaultFoldersIfNeeded());
   }
 
+  /// Applies apps queued by the native midnight auto-move job.
+  Future<void> applyPendingAutoMovedApps(
+    List<Map<String, String>> pendingApps,
+  ) async {
+    if (pendingApps.isEmpty || !_initialized) return;
+
+    final distracting =
+        List<FolderAppItem>.from(appsFor(AppFolderType.distracting));
+    var changed = false;
+
+    for (final app in pendingApps) {
+      final packageName = app['packageName'];
+      if (packageName == null || packageName.isEmpty) continue;
+      if (isInFolder(AppFolderType.distracting, packageName)) continue;
+
+      distracting.add(
+        FolderAppItem(
+          packageName: packageName,
+          appName: app['appName'] ?? packageName,
+          addedAt: DateTime.now(),
+        ),
+      );
+      changed = true;
+    }
+
+    if (!changed) return;
+    _dataVersion++;
+    _folderApps[AppFolderType.distracting] = distracting;
+    notifyListeners();
+    await _save();
+  }
+
   /// Populates Distracting / Always allowed from installed apps on first launch.
   Future<void> trySeedDefaultFolders() async {
     if (!_initialized) return;
@@ -236,7 +268,14 @@ class FolderAppsProvider extends ChangeNotifier {
   }
 
   Map<AppFolderType, List<FolderAppItem>> _decode(String jsonStr) {
-    final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+    final Map<String, dynamic> decoded;
+    try {
+      decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Failed to decode folder apps JSON: $e');
+      return createInitialFolderApps();
+    }
+
     final defaults = createInitialFolderApps();
     final loaded = <AppFolderType, List<FolderAppItem>>{};
 
@@ -244,9 +283,15 @@ class FolderAppsProvider extends ChangeNotifier {
       final raw = decoded[type.storageKey];
       if (raw is List<dynamic>) {
         loaded[type] = raw
-            .map(
-              (json) => FolderAppItem.fromJson(json as Map<String, dynamic>),
-            )
+            .map((json) {
+              try {
+                return FolderAppItem.fromJson(json as Map<String, dynamic>);
+              } catch (e) {
+                debugPrint('Skipping corrupt folder app entry: $e');
+                return null;
+              }
+            })
+            .whereType<FolderAppItem>()
             .toList();
       } else {
         loaded[type] = List<FolderAppItem>.from(defaults[type] ?? const []);

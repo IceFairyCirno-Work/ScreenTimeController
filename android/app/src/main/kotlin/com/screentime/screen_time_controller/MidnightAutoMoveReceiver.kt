@@ -15,9 +15,8 @@ import java.util.concurrent.TimeUnit
  * Runs at midnight to auto-move apps with > 3 hours of usage from the
  * previous day into the Distracting folder. No user notification is shown.
  *
- * Uses a "pending auto-move" store so that even if the app is open and
- * Flutter's sync overwrites native state, the moved apps are re-applied
- * on the next sync via [BlockingMethodChannel].
+ * Uses a pending queue ([MidnightAutoMovePendingStore]) so Flutter persists
+ * folder changes safely via SharedPreferences instead of native overwrites.
  */
 class MidnightAutoMoveReceiver : BroadcastReceiver() {
 
@@ -76,84 +75,42 @@ class MidnightAutoMoveReceiver : BroadcastReceiver() {
         context: Context,
         heavyApps: List<Map<String, Any>>,
     ) {
-        val folderPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val FOLDER_PREFS_KEY = "flutter.folder_apps"
-        val blockPrefs = context.getSharedPreferences("app_blocking", Context.MODE_PRIVATE)
-        val pendingPrefs = context.getSharedPreferences("midnight_auto_move", Context.MODE_PRIVATE)
-        val PENDING_KEY = "pending_auto_moved"
+        val existingDistracting = readExistingDistractingPackages(context)
+        val addedApps = mutableListOf<Pair<String, String>>()
 
-        val existingFolderJson = folderPrefs.getString(FOLDER_PREFS_KEY, null) ?: return
-        val existingDistracting = mutableSetOf<String>()
-        val appNames = mutableMapOf<String, String>()
-        var alwaysAllowedArray: org.json.JSONArray? = null
-        var neverAllowedArray: org.json.JSONArray? = null
-
-        try {
-            val decoded = org.json.JSONObject(existingFolderJson)
-            val distractingArray = decoded.optJSONArray("distracting") ?: return
-            for (i in 0 until distractingArray.length()) {
-                val obj = distractingArray.getJSONObject(i)
-                val pkg = obj.optString("packageName")
-                val name = obj.optString("appName")
-                if (pkg.isNotEmpty()) {
-                    existingDistracting.add(pkg)
-                    appNames[pkg] = name
-                }
-            }
-            alwaysAllowedArray = decoded.optJSONArray("alwaysAllowed")
-            neverAllowedArray = decoded.optJSONArray("neverAllowed")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse existing folder apps: ${e.message}")
-            return
-        }
-
-        val addedPackages = mutableSetOf<String>()
         for (app in heavyApps) {
             val pkg = app["package"] as? String ?: continue
             val name = app["name"] as? String ?: pkg
             if (!existingDistracting.contains(pkg)) {
-                existingDistracting.add(pkg)
-                appNames[pkg] = name
-                addedPackages.add(pkg)
+                addedApps.add(pkg to name)
             }
         }
 
-        if (addedPackages.isEmpty()) {
+        if (addedApps.isEmpty()) {
             Log.d(TAG, "No new apps to add — all heavy apps already in distracting folder")
             return
         }
 
-        val updatedArray = org.json.JSONArray()
-        for (pkg in existingDistracting) {
-            updatedArray.put(
-                org.json.JSONObject().apply {
-                    put("packageName", pkg)
-                    put("appName", appNames[pkg] ?: pkg)
-                    val cal = Calendar.getInstance()
-                    put("addedAt", "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH) + 1}-${cal.get(Calendar.DAY_OF_MONTH)}")
-                }
-            )
+        MidnightAutoMovePendingStore.addApps(context, addedApps)
+        Log.i(TAG, "Queued ${addedApps.size} apps for Flutter to add to distracting folder")
+    }
+
+    private fun readExistingDistractingPackages(context: Context): Set<String> {
+        val folderPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val existingFolderJson = folderPrefs.getString("flutter.folder_apps", null) ?: return emptySet()
+
+        val packages = mutableSetOf<String>()
+        try {
+            val decoded = org.json.JSONObject(existingFolderJson)
+            val distractingArray = decoded.optJSONArray("distracting") ?: return emptySet()
+            for (i in 0 until distractingArray.length()) {
+                val pkg = distractingArray.getJSONObject(i).optString("packageName")
+                if (pkg.isNotEmpty()) packages.add(pkg)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read existing distracting packages: ${e.message}")
         }
-
-        val updatedJson = org.json.JSONObject()
-            .put("distracting", updatedArray)
-            .put(
-                "alwaysAllowed",
-                alwaysAllowedArray ?: org.json.JSONArray(),
-            )
-            .put(
-                "neverAllowed",
-                neverAllowedArray ?: org.json.JSONArray(),
-            )
-            .toString()
-
-        folderPrefs.edit().putString(FOLDER_PREFS_KEY, updatedJson).apply()
-        Log.i(TAG, "Updated FlutterSharedPreferences with ${addedPackages.size} new distracting apps")
-
-        val existingPending = pendingPrefs.getStringSet(PENDING_KEY, emptySet()) ?: emptySet()
-        val updatedPending = existingPending + addedPackages
-        pendingPrefs.edit().putStringSet(PENDING_KEY, updatedPending).apply()
-        Log.i(TAG, "Stored ${addedPackages.size} packages in pending auto-move set")
+        return packages
     }
 
     companion object {

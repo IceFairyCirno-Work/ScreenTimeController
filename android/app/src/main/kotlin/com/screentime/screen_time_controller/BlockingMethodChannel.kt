@@ -5,8 +5,6 @@ import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
-private const val PENDING_AUTO_MOVE_PREFS = "midnight_auto_move"
-private const val PENDING_AUTO_MOVE_KEY = "pending_auto_moved"
 
 object BlockingMethodChannel {
     const val CHANNEL_NAME = "com.screentime.screen_time_controller/app_blocking"
@@ -146,6 +144,10 @@ object BlockingMethodChannel {
                     BlockedPackagesStore.notifyStateUpdated()
                     result.success(null)
                 }
+                "consumePendingAutoMovedApps" -> {
+                    val apps = MidnightAutoMovePendingStore.consumePendingApps(context)
+                    result.success(apps)
+                }
                 "syncDistractingPackages" -> {
                     // Legacy call — kept so older Dart builds don't crash.
                     val packages = call.argument<List<String>>("packages") ?: emptyList()
@@ -205,15 +207,11 @@ object BlockingMethodChannel {
         context: Context,
         flutterDistracting: List<String>,
     ): List<String> {
-        val pendingPrefs = context.getSharedPreferences(
-            PENDING_AUTO_MOVE_PREFS,
-            Context.MODE_PRIVATE,
-        )
-        val pending = pendingPrefs.getStringSet(PENDING_AUTO_MOVE_KEY, null) ?: return flutterDistracting
+        val pending = MidnightAutoMovePendingStore.pendingPackages(context)
+        if (pending.isEmpty()) return flutterDistracting
 
         val merged = (flutterDistracting + pending).distinct()
         if (merged.size > flutterDistracting.size) {
-            pendingPrefs.edit().remove(PENDING_AUTO_MOVE_KEY).apply()
             Log.i(
                 "BlockingMethodChannel",
                 "Merged ${pending.size} pending auto-move packages into distracting list",

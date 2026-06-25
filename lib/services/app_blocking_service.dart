@@ -58,4 +58,7 @@ class AppBlockingService {
   Future<Map<String, dynamic>?> getActiveTimer() => _platform.getActiveTimer();
 
   Future<void> clearActiveTimer() => _platform.clearActiveTimer();
+
+  Future<List<Map<String, String>>> consumePendingAutoMovedApps() =>
+      _platform.consumePendingAutoMovedApps();
 }
