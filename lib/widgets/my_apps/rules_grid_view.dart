@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/app_rule.dart';
 import '../../providers/rules_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import 'rules_carousel.dart';
 import 'add_rule_sheet.dart';
 
@@ -117,12 +118,17 @@ class RulesGridView extends StatelessWidget {
                   }
                   return GridView(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                      crossAxisCount: Responsive.gridCrossAxisCount(context),
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
-                      mainAxisExtent: kRulesCardHeight,
+                      mainAxisExtent: Responsive.rulesCardHeight(context),
                     ),
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    padding: EdgeInsets.fromLTRB(
+                      Responsive.horizontalPadding(context),
+                      0,
+                      Responsive.horizontalPadding(context),
+                      Responsive.scrollBottomPadding(context),
+                    ),
                     children: allRules.map((rule) {
                       if (rule is SessionRule) {
                         return SessionRuleCard(

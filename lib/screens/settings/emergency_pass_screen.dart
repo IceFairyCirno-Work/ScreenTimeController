@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/emergency_pass_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/settings/emergency_pass_ticket.dart';
 import '../../widgets/shared/circle_icon_button.dart';
 import '../../widgets/shared/hold_to_confirm_button.dart';
@@ -73,33 +74,50 @@ class EmergencyPassScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Column(
-                children: [
-                  const Spacer(flex: 3),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: EmergencyPassTicket(
-                      state: ticketState,
-                      activeRemaining: pass.activeRemaining,
-                      cooldownRemaining: pass.cooldownRemaining,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isShortViewport = constraints.maxHeight < 520;
+                  final content = Column(
+                    children: [
+                      if (!isShortViewport) const Spacer(flex: 3),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: Responsive.horizontalPadding(context),
+                        ),
+                        child: EmergencyPassTicket(
+                          state: ticketState,
+                          activeRemaining: pass.activeRemaining,
+                          cooldownRemaining: pass.cooldownRemaining,
+                        ),
+                      ),
+                      if (!isShortViewport) const Spacer(flex: 2),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(24, 0, 24, 12 + bottomInset),
+                        child: pass.canRedeem
+                            ? HoldToConfirmButton(
+                                label: 'Hold to redeem',
+                                holdingLabel: 'Keep holding...',
+                                onComplete: () => _redeem(context),
+                              )
+                            : _InactiveRedeemHint(
+                                isActive: pass.isActive,
+                                activeRemaining: pass.activeRemaining,
+                                cooldownRemaining: pass.cooldownRemaining,
+                              ),
+                      ),
+                    ],
+                  );
+
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Responsive.centeredContent(
+                        context: context,
+                        child: content,
+                      ),
                     ),
-                  ),
-                  const Spacer(flex: 2),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(24, 0, 24, 12 + bottomInset),
-                    child: pass.canRedeem
-                        ? HoldToConfirmButton(
-                            label: 'Hold to redeem',
-                            holdingLabel: 'Keep holding...',
-                            onComplete: () => _redeem(context),
-                          )
-                        : _InactiveRedeemHint(
-                            isActive: pass.isActive,
-                            activeRemaining: pass.activeRemaining,
-                            cooldownRemaining: pass.cooldownRemaining,
-                          ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ],

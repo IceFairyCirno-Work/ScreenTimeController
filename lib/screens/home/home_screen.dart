@@ -14,6 +14,7 @@ import '../../providers/timer_provider.dart';
 import '../../services/screen_timer_controller_score_calculator.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../utils/platform_capabilities.dart';
 import '../../widgets/home/home_header.dart';
 import '../../widgets/home/home_hero.dart';
@@ -22,7 +23,6 @@ import 'score_breakdown_screen.dart';
 import '../../widgets/home/score_section.dart';
 import '../../widgets/home/first_step_card.dart';
 import '../../widgets/home/gem_unlock_sheet.dart';
-import '../../widgets/home/home_bottom_nav.dart';
 import '../../widgets/home/top_today_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -266,6 +266,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             alwaysAllowedPackages: folderApps.alwaysAllowedPackageNames,
           );
           final screenData = provider.data;
+          final heroHeight = Responsive.heroHeight(
+            context,
+            topInset: _contentTopInset,
+          );
+          final bottomScrollPadding = Responsive.scrollBottomPadding(context);
 
           return Stack(
             children: [
@@ -274,8 +279,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 top: 0,
                 left: 0,
                 right: 0,
-                height: MediaQuery.of(context).size.height * 0.35 +
-                    _contentTopInset,
+                height: heroHeight,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -300,13 +304,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       // Initial gap so info starts below hero (inset shifts content down)
                       SliverToBoxAdapter(
                         child: SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.35 +
-                              _contentTopInset,
+                          height: heroHeight,
                         ),
                       ),
                       // Fading content section
                       SliverToBoxAdapter(
-                        child: DecoratedBox(
+                        child: Responsive.centeredContent(
+                          context: context,
+                          child: DecoratedBox(
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
@@ -342,14 +347,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 hasPermission: screenData.hasPermission,
                               ),
                               FirstStepCard(streakCount: _streakCount),
-                              const SizedBox(
-                                height: HomeBottomNav.scrollBottomPadding,
-                              ),
+                              SizedBox(height: bottomScrollPadding),
                             ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
+                  ],
                   ),
                 ),
               ),

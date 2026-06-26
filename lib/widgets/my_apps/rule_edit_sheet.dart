@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/app_rule.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/cjk_time_formatter.dart';
+import '../../utils/responsive.dart';
 import '../shared/app_bottom_sheet.dart';
 import 'rule_name_editor.dart';
 import 'schedule_rule_editor.dart';
@@ -475,6 +476,7 @@ class _DisableRuleViewState extends State<_DisableRuleView> {
   // ─────────────────────── Wheel Selector ───────────────────────
 
   Widget _buildWheelSelector() {
+    final wheelWidth = Responsive.wheelPickerWidth(context);
     return Container(
       height: _itemExtent * _visibleItems,
       decoration: BoxDecoration(
@@ -489,7 +491,7 @@ class _DisableRuleViewState extends State<_DisableRuleView> {
             top: (_visibleItems - 1) / 2 * _itemExtent,
             child: IgnorePointer(
               child: Container(
-                width: 220,
+                width: wheelWidth,
                 height: _itemExtent,
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceLight,

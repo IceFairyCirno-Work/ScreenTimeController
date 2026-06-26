@@ -24,6 +24,7 @@ import 'screens/welcome/welcome_gem_screen.dart';
 import 'services/rule_notification_service.dart';
 import 'services/blocking_sync_coordinator.dart';
 import 'theme/app_theme.dart';
+import 'utils/responsive.dart';
 import 'widgets/blocking_sync_listener.dart';
 import 'widgets/rule_notification_listener.dart';
 
@@ -82,6 +83,15 @@ class ScreenTimeControllerApp extends StatelessWidget {
                 title: 'Silo',
                 debugShowCheckedModeBanner: false,
                 theme: AppTheme.darkTheme,
+                builder: (context, child) {
+                  final mediaQuery = MediaQuery.of(context);
+                  return MediaQuery(
+                    data: mediaQuery.copyWith(
+                      textScaler: Responsive.clampedTextScaler(context),
+                    ),
+                    child: child ?? const SizedBox.shrink(),
+                  );
+                },
                 home: const _AppEntry(),
               );
             },

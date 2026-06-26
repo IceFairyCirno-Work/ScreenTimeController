@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/screen_time_data.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 /// Analytics section: 7-day screen time trend with weekday labels on the X axis.
 class ProfileAnalyticsSection extends StatelessWidget {
@@ -79,7 +80,7 @@ class ProfileAnalyticsSection extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         SizedBox(
-          height: 200,
+          height: Responsive.profileChartHeight(context),
           child: isLoading
               ? const Center(
                   child: SizedBox(

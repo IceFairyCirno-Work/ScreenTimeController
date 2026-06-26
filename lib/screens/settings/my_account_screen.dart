@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/user_data.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/settings/account_field_row.dart';
 import '../../widgets/settings/age_picker_sheet.dart';
 import '../../widgets/settings/delete_account_sheet.dart';
@@ -89,7 +90,9 @@ class MyAccountScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ListView(
+              child: Responsive.centeredContent(
+                context: context,
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                 children: [
                   AccountFieldRow(
@@ -158,6 +161,7 @@ class MyAccountScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ],
         ),

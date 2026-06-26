@@ -5,6 +5,7 @@ import '../../providers/folder_apps_provider.dart';
 import '../../providers/timer_provider.dart';
 import '../../services/installed_apps_cache.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/blocking_sync_listener.dart';
 import '../../widgets/home/home_bottom_nav.dart';
 import '../profile/profile_screen.dart';
@@ -178,8 +179,8 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
               index: _currentIndex,
               children: [
                 HomeScreen(onOpenProfile: _openProfile),
-                const MyAppsScreen(),
-                const TimerScreen(),
+                const ResponsiveCenteredTab(child: MyAppsScreen()),
+                const ResponsiveCenteredTab(child: TimerScreen()),
               ],
             ),
           if (showProfile)

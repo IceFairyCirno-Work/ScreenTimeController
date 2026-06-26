@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../shared/app_bottom_sheet.dart';
 
 final accountAgeOptions = List<int>.generate(100, (index) => index + 1);
@@ -136,6 +137,7 @@ class _AgePickerSheetState extends State<_AgePickerSheet> {
   }
 
   Widget _buildWheelSelector() {
+    final wheelWidth = Responsive.wheelPickerWidth(context);
     return Container(
       height: _itemExtent * _visibleItems,
       decoration: BoxDecoration(
@@ -149,7 +151,7 @@ class _AgePickerSheetState extends State<_AgePickerSheet> {
             top: (_visibleItems - 1) / 2 * _itemExtent,
             child: IgnorePointer(
               child: Container(
-                width: 220,
+                width: wheelWidth,
                 height: _itemExtent,
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceLight,

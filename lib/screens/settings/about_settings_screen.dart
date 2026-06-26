@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/settings/settings_row.dart';
 import '../../widgets/settings/settings_section.dart';
 import '../../widgets/shared/circle_icon_button.dart';
@@ -43,7 +44,9 @@ class AboutSettingsScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ListView(
+              child: Responsive.centeredContent(
+                context: context,
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(24, 6, 24, 32),
                 children: [
                   const SettingsSectionLabel(title: 'Legal'),
@@ -68,6 +71,7 @@ class AboutSettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ],
         ),

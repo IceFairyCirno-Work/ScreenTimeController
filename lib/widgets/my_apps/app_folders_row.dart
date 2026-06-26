@@ -8,16 +8,8 @@ import '../../models/app_folder.dart';
 import '../../providers/folder_apps_provider.dart';
 import '../../services/app_icon_cache.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../shared/app_icon.dart';
-
-const _kRulesCardWidth = 200.0;
-const _kFolderCardSize = _kRulesCardWidth * 0.75;
-const _kFolderScale = _kFolderCardSize / 96.0;
-const _kFolderPadding = 10.0 * _kFolderScale;
-const _kFolderIconSize = 34.0 * _kFolderScale;
-const _kFolderGridSpacing = 5.0 * _kFolderScale;
-const _kFolderBorderRadius = 22.0 * _kFolderScale;
-const _kFolderIconBorderRadius = 7.0 * _kFolderScale;
 
 class AppFoldersRow extends StatefulWidget {
   final ValueChanged<AppFolderType> onFolderTap;
@@ -90,12 +82,14 @@ class _AppFoldersRowState extends State<AppFoldersRow> {
   Widget build(BuildContext context) {
     final folderApps = context.watch<FolderAppsProvider>().folderApps;
     _scheduleIconLoad(folderApps);
+    final folderCardSize = Responsive.rulesCardWidth(context) * 0.75;
+    final horizontalPadding = Responsive.horizontalPadding(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Text(
             'Apps',
             style: AppTheme.sectionTitle,
@@ -103,16 +97,17 @@ class _AppFoldersRowState extends State<AppFoldersRow> {
         ),
         const SizedBox(height: 14),
         SizedBox(
-          height: _kFolderCardSize + 48,
+          height: folderCardSize + 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
             itemCount: AppFolder.all.length,
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
               final folder = AppFolder.all[index];
               final apps = folderApps[folder.type] ?? const [];
               return _FolderCard(
+                cardSize: folderCardSize,
                 title: folder.title,
                 subtitle: folder.subtitleFor(apps.length),
                 packageNames: _coverPackageNames(apps),
@@ -132,6 +127,7 @@ class _AppFoldersRowState extends State<AppFoldersRow> {
 }
 
 class _FolderCard extends StatelessWidget {
+  final double cardSize;
   final String title;
   final String subtitle;
   final List<String> packageNames;
@@ -140,6 +136,7 @@ class _FolderCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _FolderCard({
+    required this.cardSize,
     required this.title,
     required this.subtitle,
     required this.packageNames,
@@ -150,28 +147,40 @@ class _FolderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scale = cardSize / 96.0;
+    final padding = 10.0 * scale;
+    final iconSize = 34.0 * scale;
+    final gridSpacing = 5.0 * scale;
+    final borderRadius = 22.0 * scale;
+    final iconBorderRadius = 7.0 * scale;
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: _kFolderCardSize,
-            height: _kFolderCardSize,
-            padding: EdgeInsets.all(_kFolderPadding),
+            width: cardSize,
+            height: cardSize,
+            padding: EdgeInsets.all(padding),
             decoration: BoxDecoration(
               color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(_kFolderBorderRadius),
+              borderRadius: BorderRadius.circular(borderRadius),
             ),
             child: showEye
                 ? Center(
                     child: Icon(
                       Icons.visibility_off_outlined,
-                      size: 28 * _kFolderScale,
+                      size: 28 * scale,
                       color: AppTheme.textHint,
                     ),
                   )
-                : _buildGrid(),
+                : _buildGrid(
+                    scale: scale,
+                    iconSize: iconSize,
+                    iconBorderRadius: iconBorderRadius,
+                    gridSpacing: gridSpacing,
+                  ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -204,7 +213,12 @@ class _FolderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildGrid() {
+  Widget _buildGrid({
+    required double scale,
+    required double iconSize,
+    required double iconBorderRadius,
+    required double gridSpacing,
+  }) {
     final count = packageNames.length;
     final int overflowCount;
     final List<String> visiblePackages;
@@ -221,10 +235,10 @@ class _FolderCard extends StatelessWidget {
       for (final packageName in visiblePackages)
         AppIcon(
           iconBytes: iconBytesByPackage[packageName],
-          size: _kFolderIconSize,
-          borderRadius: _kFolderIconBorderRadius,
+          size: iconSize,
+          borderRadius: iconBorderRadius,
           fallbackIconColor: AppTheme.textPrimary,
-          fallbackIconSize: 12 * _kFolderScale,
+          fallbackIconSize: 12 * scale,
         ),
     ];
 
@@ -233,13 +247,13 @@ class _FolderCard extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: AppTheme.surfaceLight,
-            borderRadius: BorderRadius.circular(_kFolderIconBorderRadius),
+            borderRadius: BorderRadius.circular(iconBorderRadius),
           ),
           child: Center(
             child: Text(
               '+$overflowCount',
               style: GoogleFonts.inter(
-                fontSize: 9 * _kFolderScale,
+                fontSize: 9 * scale,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textSecondary,
                 decoration: TextDecoration.none,
@@ -255,7 +269,7 @@ class _FolderCard extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: AppTheme.screenTimerControllerCard,
-            borderRadius: BorderRadius.circular(_kFolderIconBorderRadius),
+            borderRadius: BorderRadius.circular(iconBorderRadius),
           ),
         ),
       );
@@ -263,8 +277,8 @@ class _FolderCard extends StatelessWidget {
 
     return GridView.count(
       crossAxisCount: 2,
-      mainAxisSpacing: _kFolderGridSpacing,
-      crossAxisSpacing: _kFolderGridSpacing,
+      mainAxisSpacing: gridSpacing,
+      crossAxisSpacing: gridSpacing,
       physics: const NeverScrollableScrollPhysics(),
       children: cells.take(4).toList(),
     );

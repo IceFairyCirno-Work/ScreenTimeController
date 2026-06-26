@@ -149,16 +149,19 @@ class OnboardingLifetimeYearsWheel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LifetimeYearsWheel(
-      targetYears: lifetimeYears.round().clamp(0, 999),
-      animate: animate,
-      suffix: suffix,
-      numberStyle: AppTheme.statNumber.copyWith(
-        fontSize: 56,
-        fontWeight: FontWeight.w800,
-        height: 1.1,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: LifetimeYearsWheel(
+        targetYears: lifetimeYears.round().clamp(0, 999),
+        animate: animate,
+        suffix: suffix,
+        numberStyle: AppTheme.statNumber.copyWith(
+          fontSize: 56,
+          fontWeight: FontWeight.w800,
+          height: 1.1,
+        ),
+        gradient: AppTheme.purpleBlueGradient,
       ),
-      gradient: AppTheme.purpleBlueGradient,
     );
   }
 }

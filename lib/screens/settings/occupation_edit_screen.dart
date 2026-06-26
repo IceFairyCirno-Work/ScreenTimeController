@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/user_data.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/shared/circle_icon_button.dart';
 
 const occupationOptions = [
@@ -58,7 +59,9 @@ class OccupationEditScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ListView.separated(
+              child: Responsive.centeredContent(
+                context: context,
+                child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                 itemCount: occupationOptions.length,
                 separatorBuilder: (_, _) => Divider(
@@ -92,6 +95,7 @@ class OccupationEditScreen extends StatelessWidget {
                   );
                 },
               ),
+            ),
             ),
           ],
         ),

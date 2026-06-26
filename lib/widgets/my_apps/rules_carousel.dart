@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/app_rule.dart';
 import '../../providers/rules_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../utils/duration_formatters.dart';
 import '../../utils/website_helpers.dart';
 
@@ -118,6 +119,7 @@ class RulesCarouselRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardHeight = Responsive.rulesCardHeight(context);
     final provider = context.watch<RulesProvider>();
     final sessionRules = packageName == null
         ? provider.sessions
@@ -171,7 +173,7 @@ class RulesCarouselRow extends StatelessWidget {
         );
       }
       return SizedBox(
-        height: kRulesCardHeight,
+        height: cardHeight,
         child: Center(
           child: Text(
             'No rules yet',
@@ -186,7 +188,7 @@ class RulesCarouselRow extends StatelessWidget {
     }
 
     return SizedBox(
-      height: kRulesCardHeight,
+      height: cardHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -244,9 +246,11 @@ class TrailingRuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardWidth = Responsive.rulesCardWidth(context);
+    final cardHeight = Responsive.rulesCardHeight(context);
     return Container(
-      width: expand ? double.infinity : kRulesCardWidth,
-      height: expand ? kRulesCardHeight : null,
+      width: expand ? double.infinity : cardWidth,
+      height: expand ? cardHeight : null,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.screenTimerControllerRuleCardBg,
@@ -375,6 +379,8 @@ class SessionRuleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheduleActive = _isScheduleActive;
     final temporallyDisabled = rule.isCurrentlyDisabled(now());
+    final cardWidth = Responsive.rulesCardWidth(context);
+    final cardHeight = Responsive.rulesCardHeight(context);
 
     return GestureDetector(
       onTap: onTap,
@@ -382,8 +388,8 @@ class SessionRuleCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: SizedBox(
-          width: expand ? double.infinity : kRulesCardWidth,
-          height: kRulesCardHeight,
+          width: expand ? double.infinity : cardWidth,
+          height: cardHeight,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -560,6 +566,8 @@ class TimeLimitRuleCard extends StatelessWidget {
     final active = rule.isRuleActive(now());
     final temporallyDisabled = rule.isCurrentlyDisabled(now());
     final statusBadge = _statusBadge();
+    final cardWidth = Responsive.rulesCardWidth(context);
+    final cardHeight = Responsive.rulesCardHeight(context);
 
     return GestureDetector(
       onTap: onTap,
@@ -567,8 +575,8 @@ class TimeLimitRuleCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: SizedBox(
-          width: expand ? double.infinity : kRulesCardWidth,
-          height: kRulesCardHeight,
+          width: expand ? double.infinity : cardWidth,
+          height: cardHeight,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -723,6 +731,8 @@ class OpenLimitRuleCard extends StatelessWidget {
     final active = rule.isRuleActive(now());
     final temporallyDisabled = rule.isCurrentlyDisabled(now());
     final statusBadge = _statusBadge(provider);
+    final cardWidth = Responsive.rulesCardWidth(context);
+    final cardHeight = Responsive.rulesCardHeight(context);
 
     return GestureDetector(
       onTap: onTap,
@@ -730,8 +740,8 @@ class OpenLimitRuleCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: SizedBox(
-          width: expand ? double.infinity : kRulesCardWidth,
-          height: kRulesCardHeight,
+          width: expand ? double.infinity : cardWidth,
+          height: cardHeight,
           child: Stack(
             fit: StackFit.expand,
             children: [

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/responsive.dart';
 import 'waiting_screen.dart';
 
 /// Waiting screen → duration picker for unblock flows.
@@ -203,6 +204,7 @@ class _UnblockDurationScreenState extends State<UnblockDurationScreen> {
   }
 
   Widget _buildWheelSelector() {
+    final wheelWidth = Responsive.wheelPickerWidth(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -218,7 +220,7 @@ class _UnblockDurationScreenState extends State<UnblockDurationScreen> {
               top: (_visibleItems - 1) / 2 * _itemExtent,
               child: IgnorePointer(
                 child: Container(
-                  width: 220,
+                  width: wheelWidth,
                   height: _itemExtent,
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceLight,

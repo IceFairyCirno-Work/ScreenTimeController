@@ -13,6 +13,7 @@ import '../../providers/folder_apps_provider.dart';
 import '../../providers/rules_provider.dart';
 import '../../services/screen_time_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../utils/platform_capabilities.dart';
 import '../../widgets/my_apps/add_rule_sheet.dart';
 import '../../widgets/my_apps/rule_detail_navigation.dart';
@@ -240,7 +241,9 @@ class _BlockedAppDetailScreenState extends State<BlockedAppDetailScreen> {
           child: Column(
             children: [
               Expanded(
-                child: SingleChildScrollView(
+                child: Responsive.centeredContent(
+                  context: context,
+                  child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -278,6 +281,7 @@ class _BlockedAppDetailScreenState extends State<BlockedAppDetailScreen> {
                     ],
                   ),
                 ),
+              ),
               ),
               if (showUnblockBar)
                 _buildUnblockButton(

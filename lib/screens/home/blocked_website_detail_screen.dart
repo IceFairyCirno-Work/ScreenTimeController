@@ -8,6 +8,7 @@ import '../../models/app_rule.dart';
 import '../../providers/emergency_pass_provider.dart';
 import '../../providers/rules_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/my_apps/add_rule_sheet.dart';
 import '../../widgets/my_apps/rule_detail_navigation.dart';
 import '../../widgets/my_apps/rules_carousel.dart';
@@ -138,7 +139,9 @@ class _BlockedWebsiteDetailScreenState extends State<BlockedWebsiteDetailScreen>
           child: Column(
             children: [
               Expanded(
-                child: SingleChildScrollView(
+                child: Responsive.centeredContent(
+                  context: context,
+                  child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -173,6 +176,7 @@ class _BlockedWebsiteDetailScreenState extends State<BlockedWebsiteDetailScreen>
                     ],
                   ),
                 ),
+              ),
               ),
               if (showUnblockBar)
                 _buildUnblockButton(

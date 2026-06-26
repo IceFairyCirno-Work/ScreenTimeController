@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/responsive.dart';
+
 /// Shared modal bottom sheet presentation used across the app.
 ///
 /// All bottom-up sheets should use this helper so swipe-down-to-dismiss and
@@ -24,12 +26,14 @@ Future<T?> showAppBottomSheet<T>({
     showDragHandle: false,
     shape: shape,
     builder: (ctx) {
-      final child = builder(ctx);
-      if (!useViewInsets) return child;
-      return Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: child,
-      );
+      Widget child = builder(ctx);
+      if (useViewInsets) {
+        child = Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: child,
+        );
+      }
+      return Responsive.constrainedSheet(context: ctx, child: child);
     },
   );
 }

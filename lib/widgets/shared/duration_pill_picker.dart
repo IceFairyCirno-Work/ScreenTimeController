@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 /// Pill-shaped dropdown trigger used in rule editors.
 class DurationPillPicker extends StatelessWidget {
@@ -207,6 +208,7 @@ class _DurationWheelDialogState<T> extends State<_DurationWheelDialog<T>> {
   }
 
   Widget _buildWheelSelector() {
+    final wheelWidth = Responsive.wheelPickerWidth(context);
     return Container(
       height: _itemExtent * _visibleItems,
       decoration: BoxDecoration(
@@ -220,7 +222,7 @@ class _DurationWheelDialogState<T> extends State<_DurationWheelDialog<T>> {
             top: (_visibleItems - 1) / 2 * _itemExtent,
             child: IgnorePointer(
               child: Container(
-                width: 220,
+                width: wheelWidth,
                 height: _itemExtent,
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceLight,

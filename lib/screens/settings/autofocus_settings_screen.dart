@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/autofocus_settings_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/settings/overlay_intervention_preview.dart';
 import '../../widgets/settings/settings_row.dart';
 import '../../widgets/settings/settings_section.dart';
@@ -46,7 +47,9 @@ class AutofocusSettingsScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ListView(
+              child: Responsive.centeredContent(
+                context: context,
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(24, 6, 24, 32),
                 children: [
                   const OverlayInterventionPreview(),
@@ -96,6 +99,7 @@ class AutofocusSettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ],
         ),

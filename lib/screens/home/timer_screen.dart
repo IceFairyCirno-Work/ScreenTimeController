@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../models/focus_template.dart';
 import '../../providers/timer_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/home/focus_template_painters.dart';
 import '../../widgets/home/focus_template_sheet.dart';
 import '../../widgets/my_apps/selected_apps_sheet.dart';
@@ -251,7 +252,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
             // ── C. For you gallery ──
             _ForYouSection(onTemplateTap: _showTemplateSheet),
-            const SizedBox(height: 120), // bottom nav space
+            SizedBox(height: Responsive.scrollBottomPadding(context)),
           ],
         ),
       ),
@@ -263,8 +264,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
     final topPadding = MediaQuery.of(context).padding.top;
     final size = MediaQuery.sizeOf(context);
     final heroHeight = 280 + topPadding;
-    final setupClockHeight =
-        ((size.width - 48).clamp(200.0, 260.0)) * 120 / 260;
+    final setupClockHeight = Responsive.timerClockWidth(context) * 120 / 260;
     final heroTimerCenterY = topPadding + 112 + setupClockHeight / 2;
     final screenCenterY = size.height / 2;
     final timerTravelY = heroTimerCenterY - screenCenterY;
@@ -272,21 +272,52 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
     return ColoredBox(
       color: AppTheme.background,
-      child: SizedBox.expand(
-        child: AnimatedBuilder(
-          animation: _enterController,
-          builder: (context, child) {
-            final timerT = _timerEnterProgress.value;
-            final bgT = _bgEnterProgress.value;
-            final timerDy = timerTravelY * (1 - timerT);
-            final bgDy = bgTravelY * (1 - bgT);
-            final bgAlignment = Alignment.lerp(
-              const Alignment(0, -0.15),
-              Alignment.center,
-              bgT,
-            )!;
+      child: Responsive.isLandscape(context)
+          ? SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: size.height,
+                child: _buildCountdownStack(
+                  context: context,
+                  timer: timer,
+                  topPadding: topPadding,
+                  timerTravelY: timerTravelY,
+                  bgTravelY: bgTravelY,
+                ),
+              ),
+            )
+          : _buildCountdownStack(
+              context: context,
+              timer: timer,
+              topPadding: topPadding,
+              timerTravelY: timerTravelY,
+              bgTravelY: bgTravelY,
+            ),
+    );
+  }
 
-            return Stack(
+  Widget _buildCountdownStack({
+    required BuildContext context,
+    required TimerProvider timer,
+    required double topPadding,
+    required double timerTravelY,
+    required double bgTravelY,
+  }) {
+    return SizedBox.expand(
+      child: AnimatedBuilder(
+        animation: _enterController,
+        builder: (context, child) {
+          final timerT = _timerEnterProgress.value;
+          final bgT = _bgEnterProgress.value;
+          final timerDy = timerTravelY * (1 - timerT);
+          final bgDy = bgTravelY * (1 - bgT);
+          final bgAlignment = Alignment.lerp(
+            const Alignment(0, -0.15),
+            Alignment.center,
+            bgT,
+          )!;
+
+          return Stack(
               fit: StackFit.expand,
               children: [
                 Transform.translate(
@@ -326,7 +357,6 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
             );
           },
         ),
-      ),
     );
   }
 }
@@ -493,8 +523,7 @@ class _CountdownDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clockWidth =
-        (MediaQuery.sizeOf(context).width - 48).clamp(200.0, 260.0);
+    final clockWidth = Responsive.timerClockWidth(context);
     final clockHeight = clockWidth * 120 / 260;
 
     return Center(

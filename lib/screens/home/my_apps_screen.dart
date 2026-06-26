@@ -7,6 +7,7 @@ import '../../providers/rules_provider.dart';
 import '../../screens/home/app_folder_detail_screen.dart';
 import '../../services/device_auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../utils/platform_capabilities.dart';
 import '../../widgets/my_apps/add_rule_sheet.dart';
 import '../../widgets/my_apps/app_folders_row.dart';
@@ -77,7 +78,9 @@ class _MyAppsScreenState extends State<MyAppsScreen> {
         bottom: false,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 140),
+          padding: EdgeInsets.only(
+            bottom: Responsive.scrollBottomPadding(context),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -113,17 +116,26 @@ class _PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
-      child: Text(
-        'Apps',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.textPrimary,
-          decoration: TextDecoration.none,
-          height: 1.2,
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        Responsive.horizontalPadding(context),
+        16,
+        Responsive.horizontalPadding(context),
+        0,
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Apps',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+            decoration: TextDecoration.none,
+            height: 1.2,
+          ),
         ),
       ),
     );

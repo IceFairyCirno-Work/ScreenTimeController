@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class HomeBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
   /// Scroll padding on tab content that extends behind the bottom nav.
-  static const scrollBottomPadding = 120.0;
+  static double scrollPadding(BuildContext context) =>
+      Responsive.scrollBottomPadding(context);
 
   const HomeBottomNav({
     super.key,

@@ -8,6 +8,7 @@ import '../../models/screen_timer_controller_metrics.dart';
 import '../../services/screen_time_service.dart';
 import '../../services/screen_timer_controller_score_calculator.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/home/metrics_row.dart';
 import '../../widgets/shared/circle_icon_button.dart';
 import '../../widgets/shared/relative_progress_bar.dart';
@@ -317,7 +318,9 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
                       top: 8,
                       bottom: 8 + bottomInset + 72,
                     ),
-                    child: Column(
+                    child: Responsive.centeredContent(
+                      context: context,
+                      child: Column(
                       children: [
                         if (_isToday) ...[
                           _contentInset(
@@ -388,6 +391,7 @@ class _ScoreBreakdownScreenState extends State<ScoreBreakdownScreen>
                           ),
                         ],
                       ],
+                    ),
                     ),
                   );
                 },
@@ -496,7 +500,10 @@ class _SemiCircularScoreGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final gaugeWidth = math.min(280.0, screenWidth - 48);
+    final gaugeWidth = math.min(
+      280.0,
+      math.min(screenWidth - 48, Responsive.contentMaxWidth(context)),
+    );
     const gaugeHeight = 150.0;
     final targetProgress = (score / 100).clamp(0.0, 1.0);
     final animatedProgress =
@@ -520,13 +527,16 @@ class _SemiCircularScoreGauge extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  '$score',
-                  textAlign: TextAlign.center,
-                  style: AppTheme.statNumber.copyWith(
-                    fontSize: 52,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '$score',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.statNumber.copyWith(
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),

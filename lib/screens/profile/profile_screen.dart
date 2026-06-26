@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +11,7 @@ import '../../screens/settings/settings_screen.dart';
 import '../../services/daily_usage_history_service.dart';
 import '../../services/streak_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/home/home_bottom_nav.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/profile/profile_analytics_chart.dart';
 import '../../widgets/profile/profile_avatar.dart';
 import '../../widgets/profile/profile_header.dart';
@@ -45,7 +47,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const _morphRange = 150.0;
 
   static const _largeAvatarSize = 110.0;
+  static const _compactAvatarSize = 96.0;
   static const _headerAvatarSize = 34.0;
+
+  double _largeAvatarSizeFor(BuildContext context) =>
+      Responsive.isCompactPhone(context) ? _compactAvatarSize : _largeAvatarSize;
 
   final _scrollController = ScrollController();
   final _largeAvatarKey = GlobalKey();
@@ -197,6 +203,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final t = _scrollProgress;
     final displayName = context.watch<UserData>().displayName;
+    final largeAvatarSize = _largeAvatarSizeFor(context);
+    final horizontalPadding = Responsive.horizontalPadding(context);
+    final bottomScrollPadding = Responsive.scrollBottomPadding(context);
 
     return NotificationListener<ScrollNotification>(
       onNotification: (_) {
@@ -210,7 +219,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             // ── Scrollable content ──
             Positioned.fill(
-              child: CustomScrollView(
+              child: Responsive.centeredContent(
+                context: context,
+                child: CustomScrollView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -232,13 +243,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           opacity: 0,
                           child: ProfileAvatar(
                             key: _largeAvatarKey,
-                            size: _largeAvatarSize,
+                            size: largeAvatarSize,
                             borderWidth: 2.4,
                           ),
                         ),
                         const SizedBox(height: 22),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                           child: Text(
                             displayName,
                             textAlign: TextAlign.center,
@@ -261,7 +272,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // 3. Metrics row.
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 48),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: math.max(horizontalPadding, 32),
+                      ),
                       child: ProfileMetricsRow(
                         dayStreakValue: '$_streakCount',
                       ),
@@ -271,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // 4. Analytics & insights.
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                       child: ProfileAnalyticsSection(
                         dailyHours: _dailyHours,
                         dayLabels: _dayLabels,
@@ -289,11 +302,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   SliverToBoxAdapter(
                     child: SizedBox(
-                      height: HomeBottomNav.scrollBottomPadding,
+                      height: bottomScrollPadding,
                     ),
                   ),
                 ],
               ),
+            ),
             ),
             // ── Fixed header with fading background ──
             Positioned(
@@ -317,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 progress: t,
                 fromCenter: _largeAvatarCenter,
                 toCenter: _headerSlotCenter,
-                fromSize: _largeAvatarSize,
+                fromSize: largeAvatarSize,
                 toSize: _headerAvatarSize,
               ),
           ],

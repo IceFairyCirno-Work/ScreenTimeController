@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/permissions_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/settings/permissions_group_list.dart';
 import '../../widgets/shared/circle_icon_button.dart';
 
@@ -67,7 +68,9 @@ class _PermissionsSettingsScreenState extends State<PermissionsSettingsScreen>
               ),
             ),
             Expanded(
-              child: ListView(
+              child: Responsive.centeredContent(
+                context: context,
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(24, 6, 24, 32),
                 children: [
                   Container(
@@ -84,6 +87,7 @@ class _PermissionsSettingsScreenState extends State<PermissionsSettingsScreen>
                   ),
                 ],
               ),
+            ),
             ),
           ],
         ),

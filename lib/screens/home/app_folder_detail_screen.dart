@@ -10,6 +10,7 @@ import '../../providers/rules_provider.dart';
 import '../../screens/home/blocked_app_detail_screen.dart';
 import '../../services/app_icon_cache.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/my_apps/allow_adult_websites_sheet.dart';
 import '../../widgets/my_apps/selected_apps_sheet.dart';
 import '../../widgets/shared/app_icon.dart';
@@ -171,7 +172,9 @@ class _AppFolderDetailScreenState extends State<AppFolderDetailScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.background,
         body: SafeArea(
-          child: SingleChildScrollView(
+          child: Responsive.centeredContent(
+            context: context,
+            child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.only(bottom: 24),
             child: Column(
@@ -193,6 +196,7 @@ class _AppFolderDetailScreenState extends State<AppFolderDetailScreen> {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

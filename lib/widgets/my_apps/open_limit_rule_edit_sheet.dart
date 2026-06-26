@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/app_rule.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/open_limit_formatter.dart';
+import '../../utils/responsive.dart';
 import '../shared/app_bottom_sheet.dart';
 import 'open_limit_rule_editor.dart';
 import 'rule_edit_sheet.dart';
@@ -397,6 +398,7 @@ class _OpenLimitDisableRuleViewState extends State<_OpenLimitDisableRuleView> {
   }
 
   Widget _buildWheelSelector() {
+    final wheelWidth = Responsive.wheelPickerWidth(context);
     return Container(
       height: _itemExtent * _visibleItems,
       decoration: BoxDecoration(
@@ -410,7 +412,7 @@ class _OpenLimitDisableRuleViewState extends State<_OpenLimitDisableRuleView> {
             top: (_visibleItems - 1) / 2 * _itemExtent,
             child: IgnorePointer(
               child: Container(
-                width: 220,
+                width: wheelWidth,
                 height: _itemExtent,
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceLight,
